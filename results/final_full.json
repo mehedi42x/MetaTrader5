@@ -1,0 +1,194 @@
+{
+  "ticks": 10030158,
+  "period_start": "2025-06-02 00:00:00.479842663",
+  "period_end": "2025-06-27 23:59:58.900499105",
+  "calendar_days": 26.0,
+  "trading_days": 20,
+  "avg_spread": 0.3029129192182216,
+  "median_spread": 0.23999999999978172,
+  "trades": 969,
+  "trades_per_day": 48.45,
+  "initial_balance": 1000.0,
+  "final_balance": 1218.96,
+  "net_profit": 218.96,
+  "return_pct": 21.9,
+  "win_rate": 68.63,
+  "gross_profit": 365.9,
+  "gross_loss": -146.93,
+  "profit_factor": 2.49,
+  "avg_trade": 0.226,
+  "avg_win": 0.5502,
+  "avg_loss": -0.4833,
+  "payoff_ratio": 1.138,
+  "expectancy_usd": 0.226,
+  "best_trade": 2.2,
+  "worst_trade": -1.4,
+  "avg_hold_s": 9.62,
+  "median_hold_s": 4.88,
+  "avg_mfe": 0.4917,
+  "avg_mae": -0.3261,
+  "avg_entry_spread": 0.2583,
+  "max_drawdown_usd": -3.91,
+  "max_drawdown_pct": -0.34,
+  "recovery_factor": 56.0,
+  "max_dd_tick_level_usd": -4.28,
+  "sharpe_per_trade": 0.3837,
+  "sharpe_annual": 42.399,
+  "sortino_annual": 109.762,
+  "max_consec_wins": 13,
+  "max_consec_losses": 7,
+  "exit_reasons": {
+    "flow_flip": {
+      "n": 28,
+      "total_pnl": -7.15,
+      "avg_pnl": -0.2554,
+      "win_rate": 10.7
+    },
+    "stop_loss": {
+      "n": 269,
+      "total_pnl": -138.73,
+      "avg_pnl": -0.5157,
+      "win_rate": 0.0
+    },
+    "take_profit": {
+      "n": 496,
+      "total_pnl": 331.14,
+      "avg_pnl": 0.6676,
+      "win_rate": 100.0
+    },
+    "time_stop": {
+      "n": 7,
+      "total_pnl": 1.78,
+      "avg_pnl": 0.255,
+      "win_rate": 57.1
+    },
+    "trail": {
+      "n": 169,
+      "total_pnl": 31.92,
+      "avg_pnl": 0.1888,
+      "win_rate": 95.9
+    }
+  },
+  "by_side": {
+    "short": {
+      "n": 487,
+      "pnl": 118.27,
+      "win_rate": 69.8
+    },
+    "long": {
+      "n": 482,
+      "pnl": 100.7,
+      "win_rate": 67.4
+    }
+  },
+  "by_hour": {
+    "7": {
+      "n": 105,
+      "pnl": 11.33,
+      "win_rate": 61.0
+    },
+    "8": {
+      "n": 111,
+      "pnl": 23.21,
+      "win_rate": 70.3
+    },
+    "9": {
+      "n": 93,
+      "pnl": 17.81,
+      "win_rate": 69.9
+    },
+    "10": {
+      "n": 94,
+      "pnl": 19.59,
+      "win_rate": 67.0
+    },
+    "11": {
+      "n": 93,
+      "pnl": 24.34,
+      "win_rate": 71.0
+    },
+    "12": {
+      "n": 89,
+      "pnl": 22.05,
+      "win_rate": 71.9
+    },
+    "13": {
+      "n": 109,
+      "pnl": 37.36,
+      "win_rate": 71.6
+    },
+    "14": {
+      "n": 71,
+      "pnl": 20.8,
+      "win_rate": 69.0
+    },
+    "15": {
+      "n": 59,
+      "pnl": 22.32,
+      "win_rate": 81.4
+    },
+    "16": {
+      "n": 53,
+      "pnl": 11.81,
+      "win_rate": 71.7
+    },
+    "17": {
+      "n": 46,
+      "pnl": 7.93,
+      "win_rate": 65.2
+    },
+    "18": {
+      "n": 46,
+      "pnl": 0.41,
+      "win_rate": 47.8
+    }
+  },
+  "daily_pnl": {
+    "2025-06-02": 16.88,
+    "2025-06-03": 8.61,
+    "2025-06-04": 9.96,
+    "2025-06-05": 12.76,
+    "2025-06-06": 12.92,
+    "2025-06-09": 17.81,
+    "2025-06-10": 5.85,
+    "2025-06-11": 19.44,
+    "2025-06-12": 8.1,
+    "2025-06-13": 8.56,
+    "2025-06-16": 17.27,
+    "2025-06-17": 10.71,
+    "2025-06-18": 7.76,
+    "2025-06-19": 10.6,
+    "2025-06-20": 12.34,
+    "2025-06-23": 7.53,
+    "2025-06-24": 14.73,
+    "2025-06-25": 10.37,
+    "2025-06-26": -0.78,
+    "2025-06-27": 7.51
+  },
+  "profitable_days": 19,
+  "losing_days": 1,
+  "best_day": 19.44,
+  "worst_day": -0.78,
+  "avg_day": 10.95,
+  "total_commission": 67.83,
+  "total_slippage": 4.84,
+  "total_spread_paid": 250.29,
+  "total_cost": 322.97,
+  "gross_before_costs": 541.93,
+  "cost_ratio_pct": 59.6,
+  "notional_per_trade": 2758.04,
+  "margin_per_trade_800x": 3.45,
+  "margin_pct_of_balance": 0.345,
+  "usd_per_001_move": 0.01,
+  "signals": 969,
+  "rejects": {
+    "flow": 6432964,
+    "eff": 656129,
+    "intens": 34123,
+    "spread": 506664,
+    "vol": 40614,
+    "cooldown": 126720,
+    "hour": 2123426,
+    "daylock": 0
+  }
+}

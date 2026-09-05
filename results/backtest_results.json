@@ -1,0 +1,897 @@
+{
+  "full": {
+    "ticks": 10030158,
+    "period_start": "2025-06-02 00:00:00.479842663",
+    "period_end": "2025-06-27 23:59:58.900499105",
+    "calendar_days": 26.0,
+    "trading_days": 20,
+    "avg_spread": 0.3029129192182216,
+    "median_spread": 0.23999999999978172,
+    "trades": 1976,
+    "trades_per_day": 98.8,
+    "initial_balance": 1000.0,
+    "final_balance": 1114.0,
+    "net_profit": 114.0,
+    "return_pct": 11.4,
+    "win_rate": 48.68,
+    "gross_profit": 442.02,
+    "gross_loss": -328.02,
+    "profit_factor": 1.348,
+    "avg_trade": 0.0577,
+    "avg_win": 0.4595,
+    "avg_loss": -0.3235,
+    "payoff_ratio": 1.42,
+    "expectancy_usd": 0.0577,
+    "best_trade": 2.2,
+    "worst_trade": -1.88,
+    "avg_hold_s": 104.51,
+    "median_hold_s": 9.14,
+    "avg_mfe": 0.3141,
+    "avg_mae": -0.2768,
+    "avg_entry_spread": 0.2199,
+    "max_drawdown_usd": -14.15,
+    "max_drawdown_pct": -1.26,
+    "recovery_factor": 8.057,
+    "max_dd_tick_level_usd": -14.23,
+    "sharpe_per_trade": 0.1176,
+    "sharpe_annual": 18.55,
+    "sortino_annual": 44.15,
+    "max_consec_wins": 13,
+    "max_consec_losses": 26,
+    "exit_reasons": {
+      "flow_flip": {
+        "n": 504,
+        "total_pnl": -79.0,
+        "avg_pnl": -0.1567,
+        "win_rate": 14.1
+      },
+      "stop_loss": {
+        "n": 543,
+        "total_pnl": -236.24,
+        "avg_pnl": -0.4351,
+        "win_rate": 0.0
+      },
+      "take_profit": {
+        "n": 614,
+        "total_pnl": 382.4,
+        "avg_pnl": 0.6228,
+        "win_rate": 100.0
+      },
+      "time_stop": {
+        "n": 49,
+        "total_pnl": 5.21,
+        "avg_pnl": 0.1062,
+        "win_rate": 61.2
+      },
+      "trail": {
+        "n": 266,
+        "total_pnl": 41.63,
+        "avg_pnl": 0.1565,
+        "win_rate": 92.9
+      }
+    },
+    "by_side": {
+      "short": {
+        "n": 996,
+        "pnl": 67.04,
+        "win_rate": 49.2
+      },
+      "long": {
+        "n": 980,
+        "pnl": 46.96,
+        "win_rate": 48.2
+      }
+    },
+    "by_hour": {
+      "0": {
+        "n": 233,
+        "pnl": -39.51,
+        "win_rate": 13.3
+      },
+      "1": {
+        "n": 97,
+        "pnl": -5.79,
+        "win_rate": 32.0
+      },
+      "2": {
+        "n": 101,
+        "pnl": -9.64,
+        "win_rate": 34.7
+      },
+      "3": {
+        "n": 84,
+        "pnl": -5.61,
+        "win_rate": 38.1
+      },
+      "4": {
+        "n": 72,
+        "pnl": -2.91,
+        "win_rate": 41.7
+      },
+      "5": {
+        "n": 78,
+        "pnl": -1.61,
+        "win_rate": 44.9
+      },
+      "6": {
+        "n": 133,
+        "pnl": -9.16,
+        "win_rate": 37.6
+      },
+      "7": {
+        "n": 105,
+        "pnl": 11.33,
+        "win_rate": 61.0
+      },
+      "8": {
+        "n": 111,
+        "pnl": 23.21,
+        "win_rate": 70.3
+      },
+      "9": {
+        "n": 93,
+        "pnl": 17.81,
+        "win_rate": 69.9
+      },
+      "10": {
+        "n": 94,
+        "pnl": 19.59,
+        "win_rate": 67.0
+      },
+      "11": {
+        "n": 93,
+        "pnl": 24.34,
+        "win_rate": 71.0
+      },
+      "12": {
+        "n": 89,
+        "pnl": 22.05,
+        "win_rate": 71.9
+      },
+      "13": {
+        "n": 109,
+        "pnl": 37.36,
+        "win_rate": 71.6
+      },
+      "14": {
+        "n": 71,
+        "pnl": 20.8,
+        "win_rate": 69.0
+      },
+      "15": {
+        "n": 59,
+        "pnl": 22.32,
+        "win_rate": 81.4
+      },
+      "16": {
+        "n": 53,
+        "pnl": 11.81,
+        "win_rate": 71.7
+      },
+      "17": {
+        "n": 46,
+        "pnl": 7.93,
+        "win_rate": 65.2
+      },
+      "18": {
+        "n": 46,
+        "pnl": 0.41,
+        "win_rate": 47.8
+      },
+      "19": {
+        "n": 53,
+        "pnl": -3.79,
+        "win_rate": 47.2
+      },
+      "20": {
+        "n": 56,
+        "pnl": -6.87,
+        "win_rate": 32.1
+      },
+      "23": {
+        "n": 100,
+        "pnl": -20.07,
+        "win_rate": 10.0
+      }
+    },
+    "daily_pnl": {
+      "2025-06-02": 12.33,
+      "2025-06-03": 5.52,
+      "2025-06-04": 3.55,
+      "2025-06-05": 7.11,
+      "2025-06-06": 11.79,
+      "2025-06-09": 12.35,
+      "2025-06-10": 3.13,
+      "2025-06-11": 13.98,
+      "2025-06-12": 2.04,
+      "2025-06-13": 1.42,
+      "2025-06-16": 7.84,
+      "2025-06-17": 6.63,
+      "2025-06-18": 2.51,
+      "2025-06-19": 6.43,
+      "2025-06-20": 7.98,
+      "2025-06-23": 1.66,
+      "2025-06-24": 10.15,
+      "2025-06-25": 2.94,
+      "2025-06-26": -5.83,
+      "2025-06-27": 0.41
+    },
+    "profitable_days": 19,
+    "losing_days": 1,
+    "best_day": 13.98,
+    "worst_day": -5.83,
+    "avg_day": 5.7,
+    "total_commission": 138.32,
+    "total_slippage": 9.88,
+    "total_spread_paid": 434.61,
+    "total_cost": 582.81,
+    "gross_before_costs": 696.81,
+    "cost_ratio_pct": 83.64,
+    "notional_per_trade": 2758.04,
+    "margin_per_trade_800x": 3.45,
+    "margin_pct_of_balance": 0.345,
+    "usd_per_001_move": 0.01,
+    "signals": 1976,
+    "rejects": {
+      "flow": 8035161,
+      "eff": 758897,
+      "intens": 57812,
+      "spread": 583742,
+      "vol": 77869,
+      "cooldown": 155390,
+      "hour": 181847,
+      "daylock": 0
+    }
+  },
+  "in_sample": {
+    "ticks": 6018094,
+    "period_start": "2025-06-02 00:00:00.479842663",
+    "period_end": "2025-06-17 19:03:15.756695509",
+    "calendar_days": 15.79,
+    "trading_days": 12,
+    "avg_spread": 0.3042608656494896,
+    "median_spread": 0.23999999999978172,
+    "trades": 1163,
+    "trades_per_day": 96.92,
+    "initial_balance": 1000.0,
+    "final_balance": 1090.11,
+    "net_profit": 90.11,
+    "return_pct": 9.01,
+    "win_rate": 51.25,
+    "gross_profit": 273.34,
+    "gross_loss": -183.23,
+    "profit_factor": 1.492,
+    "avg_trade": 0.0775,
+    "avg_win": 0.4586,
+    "avg_loss": -0.3231,
+    "payoff_ratio": 1.419,
+    "expectancy_usd": 0.0775,
+    "best_trade": 1.9,
+    "worst_trade": -1.88,
+    "avg_hold_s": 17.47,
+    "median_hold_s": 9.08,
+    "avg_mfe": 0.3284,
+    "avg_mae": -0.2746,
+    "avg_entry_spread": 0.2215,
+    "max_drawdown_usd": -10.5,
+    "max_drawdown_pct": -0.98,
+    "recovery_factor": 8.582,
+    "max_dd_tick_level_usd": -10.64,
+    "sharpe_per_trade": 0.1578,
+    "sharpe_annual": 24.655,
+    "sortino_annual": 60.281,
+    "max_consec_wins": 13,
+    "max_consec_losses": 26,
+    "exit_reasons": {
+      "flow_flip": {
+        "n": 274,
+        "total_pnl": -43.5,
+        "avg_pnl": -0.1588,
+        "win_rate": 15.0
+      },
+      "stop_loss": {
+        "n": 307,
+        "total_pnl": -131.87,
+        "avg_pnl": -0.4295,
+        "win_rate": 0.0
+      },
+      "take_profit": {
+        "n": 380,
+        "total_pnl": 234.19,
+        "avg_pnl": 0.6163,
+        "win_rate": 100.0
+      },
+      "time_stop": {
+        "n": 32,
+        "total_pnl": 3.1,
+        "avg_pnl": 0.0969,
+        "win_rate": 53.1
+      },
+      "trail": {
+        "n": 170,
+        "total_pnl": 28.19,
+        "avg_pnl": 0.1658,
+        "win_rate": 92.9
+      }
+    },
+    "by_side": {
+      "short": {
+        "n": 575,
+        "pnl": 47.07,
+        "win_rate": 51.1
+      },
+      "long": {
+        "n": 588,
+        "pnl": 43.04,
+        "win_rate": 51.4
+      }
+    },
+    "by_hour": {
+      "0": {
+        "n": 136,
+        "pnl": -24.13,
+        "win_rate": 13.2
+      },
+      "1": {
+        "n": 59,
+        "pnl": -4.23,
+        "win_rate": 30.5
+      },
+      "2": {
+        "n": 56,
+        "pnl": -1.64,
+        "win_rate": 46.4
+      },
+      "3": {
+        "n": 53,
+        "pnl": -5.51,
+        "win_rate": 34.0
+      },
+      "4": {
+        "n": 38,
+        "pnl": -2.05,
+        "win_rate": 42.1
+      },
+      "5": {
+        "n": 45,
+        "pnl": -0.17,
+        "win_rate": 42.2
+      },
+      "6": {
+        "n": 84,
+        "pnl": -5.47,
+        "win_rate": 38.1
+      },
+      "7": {
+        "n": 62,
+        "pnl": 9.75,
+        "win_rate": 69.4
+      },
+      "8": {
+        "n": 75,
+        "pnl": 16.98,
+        "win_rate": 72.0
+      },
+      "9": {
+        "n": 57,
+        "pnl": 15.07,
+        "win_rate": 73.7
+      },
+      "10": {
+        "n": 57,
+        "pnl": 14.55,
+        "win_rate": 70.2
+      },
+      "11": {
+        "n": 54,
+        "pnl": 17.45,
+        "win_rate": 74.1
+      },
+      "12": {
+        "n": 55,
+        "pnl": 17.87,
+        "win_rate": 76.4
+      },
+      "13": {
+        "n": 59,
+        "pnl": 25.21,
+        "win_rate": 76.3
+      },
+      "14": {
+        "n": 32,
+        "pnl": 9.17,
+        "win_rate": 71.9
+      },
+      "15": {
+        "n": 37,
+        "pnl": 10.43,
+        "win_rate": 81.1
+      },
+      "16": {
+        "n": 37,
+        "pnl": 5.5,
+        "win_rate": 64.9
+      },
+      "17": {
+        "n": 31,
+        "pnl": 7.02,
+        "win_rate": 64.5
+      },
+      "18": {
+        "n": 22,
+        "pnl": -0.1,
+        "win_rate": 54.5
+      },
+      "19": {
+        "n": 24,
+        "pnl": -1.45,
+        "win_rate": 50.0
+      },
+      "20": {
+        "n": 39,
+        "pnl": -3.01,
+        "win_rate": 43.6
+      },
+      "23": {
+        "n": 51,
+        "pnl": -11.12,
+        "win_rate": 9.8
+      }
+    },
+    "daily_pnl": {
+      "2025-06-02": 12.33,
+      "2025-06-03": 5.52,
+      "2025-06-04": 3.55,
+      "2025-06-05": 7.11,
+      "2025-06-06": 11.79,
+      "2025-06-09": 12.35,
+      "2025-06-10": 3.13,
+      "2025-06-11": 13.98,
+      "2025-06-12": 2.04,
+      "2025-06-13": 1.42,
+      "2025-06-16": 7.84,
+      "2025-06-17": 9.02
+    },
+    "profitable_days": 12,
+    "losing_days": 0,
+    "best_day": 13.98,
+    "worst_day": 1.42,
+    "avg_day": 7.51,
+    "total_commission": 81.41,
+    "total_slippage": 5.82,
+    "total_spread_paid": 257.64,
+    "total_cost": 344.87,
+    "gross_before_costs": 434.98,
+    "cost_ratio_pct": 79.28,
+    "notional_per_trade": 3021.91,
+    "margin_per_trade_800x": 3.78,
+    "margin_pct_of_balance": 0.378,
+    "usd_per_001_move": 0.01,
+    "signals": 1163,
+    "rejects": {
+      "flow": 4830094,
+      "eff": 451683,
+      "intens": 33374,
+      "spread": 354428,
+      "vol": 46116,
+      "cooldown": 93866,
+      "hour": 98476,
+      "daylock": 0
+    }
+  },
+  "out_of_sample": {
+    "ticks": 4012064,
+    "period_start": "2025-06-17 19:03:15.771753788",
+    "period_end": "2025-06-27 23:59:58.900499105",
+    "calendar_days": 10.21,
+    "trading_days": 9,
+    "avg_spread": 0.3008910002432663,
+    "median_spread": 0.2300000000000182,
+    "trades": 812,
+    "trades_per_day": 90.22,
+    "initial_balance": 1000.0,
+    "final_balance": 1024.01,
+    "net_profit": 24.01,
+    "return_pct": 2.4,
+    "win_rate": 44.95,
+    "gross_profit": 168.33,
+    "gross_loss": -144.32,
+    "profit_factor": 1.166,
+    "avg_trade": 0.0296,
+    "avg_win": 0.4612,
+    "avg_loss": -0.3229,
+    "payoff_ratio": 1.428,
+    "expectancy_usd": 0.0296,
+    "best_trade": 2.2,
+    "worst_trade": -1.4,
+    "avg_hold_s": 229.4,
+    "median_hold_s": 9.19,
+    "avg_mfe": 0.2934,
+    "avg_mae": -0.2798,
+    "avg_entry_spread": 0.2174,
+    "max_drawdown_usd": -14.15,
+    "max_drawdown_pct": -1.37,
+    "recovery_factor": 1.697,
+    "max_dd_tick_level_usd": -14.15,
+    "sharpe_per_trade": 0.0605,
+    "sharpe_annual": 9.119,
+    "sortino_annual": 20.888,
+    "max_consec_wins": 10,
+    "max_consec_losses": 20,
+    "exit_reasons": {
+      "flow_flip": {
+        "n": 230,
+        "total_pnl": -35.97,
+        "avg_pnl": -0.1564,
+        "win_rate": 12.6
+      },
+      "stop_loss": {
+        "n": 234,
+        "total_pnl": -103.7,
+        "avg_pnl": -0.4432,
+        "win_rate": 0.0
+      },
+      "take_profit": {
+        "n": 234,
+        "total_pnl": 148.21,
+        "avg_pnl": 0.6334,
+        "win_rate": 100.0
+      },
+      "time_stop": {
+        "n": 18,
+        "total_pnl": 2.03,
+        "avg_pnl": 0.1128,
+        "win_rate": 72.2
+      },
+      "trail": {
+        "n": 96,
+        "total_pnl": 13.44,
+        "avg_pnl": 0.14,
+        "win_rate": 92.7
+      }
+    },
+    "by_side": {
+      "short": {
+        "n": 422,
+        "pnl": 19.41,
+        "win_rate": 46.2
+      },
+      "long": {
+        "n": 390,
+        "pnl": 4.6,
+        "win_rate": 43.6
+      }
+    },
+    "by_hour": {
+      "0": {
+        "n": 97,
+        "pnl": -15.38,
+        "win_rate": 13.4
+      },
+      "1": {
+        "n": 38,
+        "pnl": -1.56,
+        "win_rate": 34.2
+      },
+      "2": {
+        "n": 45,
+        "pnl": -8.0,
+        "win_rate": 20.0
+      },
+      "3": {
+        "n": 31,
+        "pnl": -0.11,
+        "win_rate": 45.2
+      },
+      "4": {
+        "n": 34,
+        "pnl": -0.86,
+        "win_rate": 41.2
+      },
+      "5": {
+        "n": 33,
+        "pnl": -1.44,
+        "win_rate": 48.5
+      },
+      "6": {
+        "n": 49,
+        "pnl": -3.69,
+        "win_rate": 36.7
+      },
+      "7": {
+        "n": 43,
+        "pnl": 1.58,
+        "win_rate": 48.8
+      },
+      "8": {
+        "n": 36,
+        "pnl": 6.23,
+        "win_rate": 66.7
+      },
+      "9": {
+        "n": 36,
+        "pnl": 2.74,
+        "win_rate": 63.9
+      },
+      "10": {
+        "n": 37,
+        "pnl": 5.05,
+        "win_rate": 62.2
+      },
+      "11": {
+        "n": 39,
+        "pnl": 6.89,
+        "win_rate": 66.7
+      },
+      "12": {
+        "n": 34,
+        "pnl": 4.18,
+        "win_rate": 64.7
+      },
+      "13": {
+        "n": 50,
+        "pnl": 12.15,
+        "win_rate": 66.0
+      },
+      "14": {
+        "n": 39,
+        "pnl": 11.63,
+        "win_rate": 66.7
+      },
+      "15": {
+        "n": 22,
+        "pnl": 11.89,
+        "win_rate": 81.8
+      },
+      "16": {
+        "n": 16,
+        "pnl": 6.32,
+        "win_rate": 87.5
+      },
+      "17": {
+        "n": 15,
+        "pnl": 0.91,
+        "win_rate": 66.7
+      },
+      "18": {
+        "n": 24,
+        "pnl": 0.51,
+        "win_rate": 41.7
+      },
+      "19": {
+        "n": 28,
+        "pnl": -2.23,
+        "win_rate": 42.9
+      },
+      "20": {
+        "n": 17,
+        "pnl": -3.84,
+        "win_rate": 5.9
+      },
+      "23": {
+        "n": 49,
+        "pnl": -8.95,
+        "win_rate": 10.2
+      }
+    },
+    "daily_pnl": {
+      "2025-06-17": -2.27,
+      "2025-06-18": 2.51,
+      "2025-06-19": 6.43,
+      "2025-06-20": 7.98,
+      "2025-06-23": 1.66,
+      "2025-06-24": 10.15,
+      "2025-06-25": 2.94,
+      "2025-06-26": -5.83,
+      "2025-06-27": 0.41
+    },
+    "profitable_days": 7,
+    "losing_days": 2,
+    "best_day": 10.15,
+    "worst_day": -5.83,
+    "avg_day": 2.67,
+    "total_commission": 56.84,
+    "total_slippage": 4.06,
+    "total_spread_paid": 176.51,
+    "total_cost": 237.41,
+    "gross_before_costs": 261.42,
+    "cost_ratio_pct": 90.82,
+    "notional_per_trade": 2362.23,
+    "margin_per_trade_800x": 2.95,
+    "margin_pct_of_balance": 0.295,
+    "usd_per_001_move": 0.01,
+    "signals": 812,
+    "rejects": {
+      "flow": 3200460,
+      "eff": 307157,
+      "intens": 24480,
+      "spread": 228892,
+      "vol": 31710,
+      "cooldown": 61457,
+      "hour": 83371,
+      "daylock": 0
+    }
+  },
+  "monte_carlo": [
+    {
+      "seed": 101,
+      "trades": 745,
+      "net": 65.92,
+      "pf": 1.567,
+      "wr": 51.01,
+      "dd": -0.91,
+      "ret": 6.59
+    },
+    {
+      "seed": 102,
+      "trades": 748,
+      "net": 41.08,
+      "pf": 1.321,
+      "wr": 45.19,
+      "dd": -1.13,
+      "ret": 4.11
+    },
+    {
+      "seed": 103,
+      "trades": 782,
+      "net": 58.48,
+      "pf": 1.483,
+      "wr": 50.13,
+      "dd": -0.96,
+      "ret": 5.85
+    },
+    {
+      "seed": 104,
+      "trades": 782,
+      "net": 54.37,
+      "pf": 1.403,
+      "wr": 49.1,
+      "dd": -1.17,
+      "ret": 5.44
+    },
+    {
+      "seed": 105,
+      "trades": 827,
+      "net": 22.22,
+      "pf": 1.151,
+      "wr": 46.8,
+      "dd": -1.38,
+      "ret": 2.22
+    },
+    {
+      "seed": 106,
+      "trades": 797,
+      "net": 50.05,
+      "pf": 1.411,
+      "wr": 48.81,
+      "dd": -0.95,
+      "ret": 5.01
+    },
+    {
+      "seed": 107,
+      "trades": 798,
+      "net": 51.78,
+      "pf": 1.396,
+      "wr": 48.25,
+      "dd": -1.01,
+      "ret": 5.18
+    },
+    {
+      "seed": 108,
+      "trades": 827,
+      "net": 61.59,
+      "pf": 1.507,
+      "wr": 51.03,
+      "dd": -0.93,
+      "ret": 6.16
+    }
+  ],
+  "sensitivity": [
+    {
+      "flow_z": 1.8,
+      "eff_min": 0.35,
+      "trades": 1238,
+      "net": 35.91,
+      "pf": 1.161,
+      "wr": 46.2
+    },
+    {
+      "flow_z": 1.8,
+      "eff_min": 0.42,
+      "trades": 951,
+      "net": 12.22,
+      "pf": 1.071,
+      "wr": 43.43
+    },
+    {
+      "flow_z": 1.8,
+      "eff_min": 0.5,
+      "trades": 597,
+      "net": 12.12,
+      "pf": 1.12,
+      "wr": 43.05
+    },
+    {
+      "flow_z": 2.15,
+      "eff_min": 0.35,
+      "trades": 1040,
+      "net": 39.98,
+      "pf": 1.215,
+      "wr": 47.12
+    },
+    {
+      "flow_z": 2.15,
+      "eff_min": 0.42,
+      "trades": 812,
+      "net": 24.01,
+      "pf": 1.166,
+      "wr": 44.95
+    },
+    {
+      "flow_z": 2.15,
+      "eff_min": 0.5,
+      "trades": 532,
+      "net": 20.48,
+      "pf": 1.237,
+      "wr": 44.92
+    },
+    {
+      "flow_z": 2.5,
+      "eff_min": 0.35,
+      "trades": 797,
+      "net": 40.22,
+      "pf": 1.29,
+      "wr": 46.8
+    },
+    {
+      "flow_z": 2.5,
+      "eff_min": 0.42,
+      "trades": 645,
+      "net": 27.05,
+      "pf": 1.245,
+      "wr": 44.81
+    },
+    {
+      "flow_z": 2.5,
+      "eff_min": 0.5,
+      "trades": 445,
+      "net": 23.09,
+      "pf": 1.324,
+      "wr": 43.82
+    }
+  ],
+  "params": {
+    "lot": 0.01,
+    "leverage": 800.0,
+    "initial_balance": 1000.0,
+    "commission_per_lot_rt": 7.0,
+    "slippage_ticks": 0.5,
+    "tau_flow": 3.0,
+    "tau_eff": 6.0,
+    "tau_intens_fast": 5.0,
+    "tau_intens_slow": 900.0,
+    "tau_vol": 30.0,
+    "tau_spread": 300.0,
+    "tau_flow_var": 1800.0,
+    "flow_z": 2.15,
+    "eff_min": 0.42,
+    "intens_mult": 1.55,
+    "spread_mult": 1.25,
+    "spread_edge_frac": 0.55,
+    "tp_k": 26.0,
+    "sl_k": 18.0,
+    "trail_arm_k": 14.0,
+    "trail_k": 8.0,
+    "flip_z": 1.3,
+    "max_hold_s": 90.0,
+    "cooldown_s": 8.0,
+    "blocked_hours": [
+      21,
+      22
+    ],
+    "daily_loss_stop": 0.04,
+    "daily_profit_stop": 0.1,
+    "max_trades_per_day": 400,
+    "min_vol": 0.004
+  }
+}
