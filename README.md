@@ -23,6 +23,26 @@ mql5/TFAM_Gold.mq5   live MT5 Expert Advisor (1:1 port)
 results/             JSON results, trades.csv, equity_curve.png
 ```
 
+## Dukascopy — 2 years of real ticks
+
+```bash
+bash run_dukascopy.sh          # download 2y XAUUSD ticks + run both strategies
+```
+
+`src/dukascopy.py` downloads and decodes Dukascopy's hourly `.bi5` LZMA tick
+files (resumable cache, parallel workers) and writes MT5-format CSV.
+Note: this sandbox blocks Dukascopy, so run it on your own machine —
+see [docs/REAL_DATA_STATUS.md](docs/REAL_DATA_STATUS.md).
+
+## Two strategies
+
+| | TFAM | QAS |
+|---|---|---|
+| Signal | trade-flow momentum (where price went) | **quote asymmetry** (how bid/ask move apart) |
+| Core metric | flow z-score + directional efficiency | one-sided quote revisions + spread skew |
+| Exits | TP/SL/flow-flip/trail/time | TP/SL/breakeven/pressure-decay/time |
+| Run | `src/report.py` | `src/run_scalper.py` |
+
 ## Real tick data
 Full real-data pipeline is ready (`src/mt5_loader.py` + `src/report.py`).
 Your `XAUUSD.txt` (480 MB, Git LFS) could not be fetched — this sandbox blocks
