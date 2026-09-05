@@ -52,7 +52,7 @@ def load_mt5_ticks(path: str) -> pd.DataFrame:
     out["bid"] = pd.to_numeric(df["bid"], errors="coerce")
     out["ask"] = pd.to_numeric(df["ask"], errors="coerce")
     out = out.dropna().reset_index(drop=True)
-    out["ts"] = out["time"].astype("int64") / 1e9
+    out["ts"] = out["time"].values.astype("datetime64[ms]").astype("int64") / 1000.0
     return out
 
 

@@ -23,6 +23,15 @@ mql5/TFAM_Gold.mq5   live MT5 Expert Advisor (1:1 port)
 results/             JSON results, trades.csv, equity_curve.png
 ```
 
+## Real tick data
+Full real-data pipeline is ready (`src/mt5_loader.py` + `src/report.py`).
+Your `XAUUSD.txt` (480 MB, Git LFS) could not be fetched — this sandbox blocks
+GitHub's CDN hosts. See **[docs/REAL_DATA_STATUS.md](docs/REAL_DATA_STATUS.md)**.
+
+```bash
+.venv/bin/python src/report.py /path/to/XAUUSD.txt
+```
+
 ## Run
 ```bash
 python3 -m venv .venv && .venv/bin/pip install numpy pandas matplotlib

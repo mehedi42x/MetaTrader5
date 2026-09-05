@@ -93,7 +93,7 @@ class Params:
 
     # ---- entry thresholds ----------------------------------------------
     flow_z: float = 2.15
-    eff_min: float = 0.42
+    eff_min: float = 1.90                   # random walk = 1.0; >1 = directional
     intens_mult: float = 1.55
     spread_mult: float = 1.25               # vs own baseline
     spread_edge_frac: float = 0.55          # spread must be < 55% of target
@@ -150,9 +150,11 @@ class TFAM:
         self.prev_mid = None
         self.prev_ts = None
         self.flow = 0.0
+        self.nflow = 0.0
         self.flow_var = 1.0
         self.disp = 0.0          # sum |dmid| ewma  (denominator of efficiency)
         self.net = 0.0           # signed dmid ewma (numerator of efficiency)
+        self.neff = 0.0          # effective tick count in the same window
         self.i_fast = 0.0
         self.i_slow = 0.0
         self.vol = 0.02
@@ -205,7 +207,7 @@ class TFAM:
             self.spread_ewma = spread
             return mid, spread, False
 
-        dt = max(1e-4, ts - self.prev_ts)
+        dt = max(1e-3, ts - self.prev_ts)
         dmid = mid - self.prev_mid
 
         # tick-rule sign
@@ -214,6 +216,7 @@ class TFAM:
         # --- time-decayed flow --------------------------------------------
         a = np.exp(-dt / p.tau_flow)
         self.flow = a * self.flow + s
+        self.nflow = a * self.nflow + 1.0
 
         # slow variance of flow for self-normalising z-score
         av = np.exp(-dt / p.tau_flow_var)
@@ -223,6 +226,7 @@ class TFAM:
         ae = np.exp(-dt / p.tau_eff)
         self.net = ae * self.net + dmid
         self.disp = ae * self.disp + abs(dmid)
+        self.neff = ae * self.neff + 1.0
 
         # --- intensity ------------------------------------------------------
         inst = 1.0 / dt
@@ -242,6 +246,36 @@ class TFAM:
         self.prev_mid, self.prev_ts = mid, ts
         self.warm += 1
         return mid, spread, self.warm > 5000
+
+    # ------------------------------------------------------------------ #
+    def flow_score(self) -> float:
+        """Density-invariant order-flow imbalance z-score.
+
+        flow is a time-decayed sum of +-1 tick signs over N_eff effective
+        ticks. Under the null (independent signs) its std is sqrt(N_eff),
+        so dividing by that gives a true z-score that means the same thing
+        on a 500k-ticks/day real feed and on a thin feed alike.
+        """
+        if self.nflow < 2.0:
+            return 0.0
+        return self.flow / np.sqrt(self.nflow)
+
+    # ------------------------------------------------------------------ #
+    def efficiency(self) -> float:
+        """Density-invariant directional efficiency.
+
+        For a pure random walk of N steps, |net| ~ sqrt(N) * mean|dmid| while
+        dispersion = N * mean|dmid|, so |net|/disp ~ 1/sqrt(N) - i.e. the raw
+        ratio depends on tick density and is useless across feeds.
+
+        Normalising by sqrt(N_eff) removes that dependence:
+            E* = |net| * sqrt(N_eff) / disp
+        E* ~= 1.0  -> random walk / bid-ask bounce
+        E* >> 1.0  -> genuine one-sided liquidity consumption
+        """
+        if self.disp <= 1e-12 or self.neff < 2.0:
+            return 0.0
+        return abs(self.net) * np.sqrt(self.neff) / self.disp
 
     # ------------------------------------------------------------------ #
     def _close(self, ts: float, price: float, reason: str):
@@ -297,7 +331,7 @@ class TFAM:
                 lvl = self.best - p.trail_k * self.entry_vol
                 self.trail_level = max(self.trail_level, lvl)
 
-            fz = self.flow / max(0.6, np.sqrt(self.flow_var))
+            fz = self.flow_score()
 
             if move <= -p.sl_k * self.entry_vol:
                 self._close(ts, px, "stop_loss")
@@ -337,12 +371,12 @@ class TFAM:
             self.rejects["vol"] += 1
             return
 
-        fz = self.flow / max(0.6, np.sqrt(self.flow_var))
+        fz = self.flow_score()
         if abs(fz) < p.flow_z:
             self.rejects["flow"] += 1
             return
 
-        eff = abs(self.net) / max(1e-9, self.disp)
+        eff = self.efficiency()
         if eff < p.eff_min:
             self.rejects["eff"] += 1
             return
@@ -381,3 +415,48 @@ class TFAM:
     def finalize(self):
         if self.day is not None:
             self.daily[self.day] = self.balance - self.day_start_equity
+
+
+# --------------------------------------------------------------------------- #
+def calibrate(ticks, p: Params = None, sample_every: int = 97,
+              fz_pct: float = 95.0, eff_pct: float = 90.0,
+              max_ticks: int = 3_000_000, verbose: bool = True) -> Params:
+    """Auto-calibrate entry thresholds to a specific tick feed.
+
+    The signal definitions are density-invariant, but the *right percentile*
+    to trade at still depends on how noisy a given broker's feed is. This
+    runs the state machine over a warm-up slice WITHOUT trading, measures the
+    real distribution of |flow_score| and efficiency, and sets the thresholds
+    at the requested percentiles.
+
+    This is calibration, not curve fitting: no P&L is used, only the shape of
+    the signal distribution.
+    """
+    p = p or Params()
+    probe = TFAM(Params(**{**{k: v for k, v in asdict(p).items()}, "flow_z": 1e9}))
+    ts = ticks["ts"].to_numpy()
+    bid = ticks["bid"].to_numpy()
+    ask = ticks["ask"].to_numpy()
+    hrs = ticks["time"].dt.hour.to_numpy().astype(np.int32)
+    dks = ticks["time"].dt.strftime("%Y-%m-%d").to_numpy()
+
+    n = min(len(ts), max_ticks)
+    FZ, EF = [], []
+    for i in range(n):
+        probe.on_tick(ts[i], bid[i], ask[i], int(hrs[i]), dks[i])
+        if probe.warm > 20000 and i % sample_every == 0:
+            FZ.append(abs(probe.flow_score()))
+            EF.append(probe.efficiency())
+    if len(FZ) < 100:
+        if verbose:
+            print("[calib] not enough samples, keeping defaults")
+        return p
+
+    fz = float(np.percentile(FZ, fz_pct))
+    ef = float(np.percentile(EF, eff_pct))
+    out = Params(**{**{k: v for k, v in asdict(p).items()},
+                    "flow_z": round(fz, 3), "eff_min": round(ef, 3)})
+    if verbose:
+        print(f"[calib] samples={len(FZ):,}  flow_z(p{fz_pct})={out.flow_z}  "
+              f"eff_min(p{eff_pct})={out.eff_min}")
+    return out
