@@ -102,6 +102,52 @@ def _parse(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------------- #
+def convert_dir(folder: str, out: str, verbose: bool = True) -> dict:
+    """Stream every monthly zip straight to an MT5 CSV, one month at a time.
+
+    Concatenating years of tick data in memory needs many GB, so this writes
+    incrementally and never holds more than one month at once.
+    """
+    zips = sorted(glob.glob(os.path.join(folder, "*.zip")))
+    if not zips:
+        raise FileNotFoundError(f"no .zip files in {folder}")
+    os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
+
+    total = 0
+    first = last = None
+    with open(out, "w", newline="") as fh:
+        fh.write("<DATE>\t<TIME>\t<BID>\t<ASK>\t<LAST>\t<VOLUME>\n")
+        for p in zips:
+            try:
+                df = read_zip(p, verbose=verbose)
+            except Exception as e:
+                print(f"[histdata] WARN {os.path.basename(p)}: {e}", file=sys.stderr)
+                continue
+            if df.empty:
+                continue
+            t = df["time"].dt
+            block = pd.DataFrame({
+                "d": t.strftime("%Y.%m.%d"),
+                "t": t.strftime("%H:%M:%S.%f").str[:-3],
+                "b": df["bid"].map(lambda x: f"{x:.3f}"),
+                "a": df["ask"].map(lambda x: f"{x:.3f}"),
+                "l": 0, "v": 0,
+            })
+            block.to_csv(fh, sep="\t", header=False, index=False)
+            total += len(df)
+            first = first or df["time"].iloc[0]
+            last = df["time"].iloc[-1]
+            if verbose:
+                print(f"[histdata]   -> {len(df):,} ticks (running total {total:,})",
+                      flush=True)
+            del df, block
+
+    if verbose:
+        print(f"[histdata] TOTAL {total:,} ticks  {first} -> {last}")
+        print(f"[histdata] wrote {out} ({os.path.getsize(out)/1e6:,.1f} MB)")
+    return {"ticks": total, "first": first, "last": last}
+
+
 def load_dir(folder: str, verbose: bool = True) -> pd.DataFrame:
     """Load and concatenate every HistData monthly zip in a folder."""
     zips = sorted(glob.glob(os.path.join(folder, "*.zip")))
@@ -174,8 +220,7 @@ def main():
     else:
         folder = a.folder or a.dest
 
-    df = load_dir(folder)
-    to_mt5_csv(df, a.out)
+    convert_dir(folder, a.out)
     print("\nNext:")
     print(f"  python src/report.py {a.out}        # TFAM")
     print(f"  python src/run_scalper.py {a.out}   # QAS")
