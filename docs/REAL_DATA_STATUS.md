@@ -31,6 +31,33 @@ Python urllib, and the agent fetch tool. The proxy 301-redirects all
 
 **This is a sandbox egress restriction, not a problem with your repo or credentials.**
 
+## Full network allowlist (measured, not assumed)
+
+TLS reachability scan from the sandbox:
+
+| Reachable | Blocked |
+|---|---|
+| `github.com` | `raw.githubusercontent.com` |
+| `api.github.com` | `objects.githubusercontent.com` |
+| `codeload.github.com` | `release-assets.githubusercontent.com` |
+| `pypi.org` | `gist.github.com` |
+| `files.pythonhosted.org` | all Google hosts (Drive, googleapis, oauth2) |
+| `registry.npmjs.org` | Dropbox, OneDrive, MEGA, transfer.sh, 0x0.st, file.io, gofile, catbox, pixeldrain |
+| | GitLab, Bitbucket, Codeberg, HuggingFace |
+| | crates.io, rubygems.org, proxy.golang.org, maven |
+| | archive.org, zenodo, kaggle, stooq, histdata, dukascopy |
+
+Consequences:
+
+* **Git push/pull is the only viable data channel.** Verified end to end:
+  a 40 MB ZIP pushed in 4.6 s and read back with a matching MD5.
+* **Git LFS does not work** — LFS objects live on a blocked CDN.
+* **GitHub Release assets do not work** — the API returns a 302 to
+  `release-assets.githubusercontent.com`, which is blocked.
+* `gh`, `gdown`, and `rclone` all install and run correctly; they fail only
+  because their target hosts are unreachable. rclone was verified working by
+  listing `github.com` over its HTTP backend.
+
 ## How to get the report
 
 Any of these unblocks it:
