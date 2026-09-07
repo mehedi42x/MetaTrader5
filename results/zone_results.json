@@ -1,0 +1,47 @@
+{
+  "config": {
+    "zone_w": 0.1,
+    "min_touch": 5,
+    "entry_window": 60.0,
+    "break_zones": 2,
+    "exit_touch": 5,
+    "exit_window": 60.0,
+    "hard_stop": 1.5,
+    "max_hold": 900.0,
+    "take_profit": 0.0,
+    "max_spread": 0.6,
+    "trade_hours": [
+      6,
+      20
+    ],
+    "lots": 0.01,
+    "contract_size": 100.0,
+    "leverage": 800.0,
+    "commission_per_lot": 7.0,
+    "slippage": 0.01,
+    "initial_balance": 1000.0
+  },
+  "ticks": 12799655,
+  "stats": {
+    "trades": 81703,
+    "net": -41364.61,
+    "return_pct": -4136.46,
+    "pf": 0.079,
+    "win_rate": 10.15,
+    "expectancy": -0.5063,
+    "gross_total": -34011.34,
+    "cost_total": 7353.27,
+    "max_dd": 41364.61,
+    "avg_dur_s": 25.5,
+    "final_balance": -40364.61
+  },
+  "signals": 133180,
+  "skipped": {
+    "spread": 51477
+  },
+  "exit_reasons": {
+    "stop": 4784,
+    "time": 17,
+    "zone_reverse": 76902
+  }
+}
