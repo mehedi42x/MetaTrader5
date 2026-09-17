@@ -1,0 +1,43 @@
+# Render blueprint for the MT5 Web Console.
+#
+# IMPORTANT (verified 2026-09-17): MetaQuotes publishes the MetaTrader5 python
+# package as win_amd64 wheels only, and MetaTrader 5 itself runs on Linux only
+# through Wine (the official mt5linux.sh installs Wine + the Windows installer).
+# A Render service gives you neither sudo nor an X display, so MT5 CANNOT live in
+# this service. It is the control plane; the terminal stays on your Windows box
+# (or your own Linux+Wine box) and connects via the bundled Bridge agent.
+services:
+  - type: web
+    name: mt5-web-console
+    runtime: python
+    plan: starter
+    region: singapore            # nearest to most FX servers you trade + your VPS
+    branch: main
+    healthCheckPath: /api/health
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MT5WEB_PASSCODE      # dashboard password (first sign-in also lets you set it in the UI)
+        sync: false
+      - key: MT5WEB_BRIDGE_KEY    # agent auth key; leave empty and the app generates one in the Bridge tab
+        sync: false
+      - key: MT5WEB_SECRET        # 32+ char random string; keeps tokens/password-ciphertext stable across restarts
+        generateValue: true
+      - key: MT5WEB_DATA
+        value: /var/tmp/mt5web-data
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: MT5WEB_MAX_LOT
+        value: "2.0"
+
+  # --- Docker variant -----------------------------------------------------
+  # Use this only if you want to self-host the dashboard on a box that also runs
+  # Wine + MetaTrader 5 (needs SYS_ADMIN, a privileged build, and ~1 GB more RAM).
+  # In that case the container can run BOTH the app and the bridge agent.
+  # - type: web
+  #   name: mt5-web-console-docker
+  #   runtime: docker
+  #   plan: starter
+  #   dockerfilePath: ./Dockerfile
+  #   healthCheckPath: /api/health

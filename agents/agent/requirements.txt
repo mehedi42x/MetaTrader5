@@ -1,0 +1,6 @@
+# MetaTrader 5 bridge agent - install on the machine that RUNS the terminal.
+# Windows: python -m pip install -r requirements.txt   (64-bit Python 3.9-3.13)
+# Linux  : same, but the packages must be installed with the *Wine* python, e.g.
+#          WINEPREFIX=~/.mt5 wine 'C:\Python312\python.exe' -m pip install -r requirements.txt
+MetaTrader5>=5.0.4560 ; sys_platform == 'win32'
+websockets>=12.0

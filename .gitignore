@@ -1,0 +1,25 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# runtime state (contains encrypted credentials + agent keys) - keep OUT of git
+data/
+*.sqlite3
+
+# agent scratch
+agents/.mock_mt5_data/
+agents/agent.log
+agents/agent/agent.json
+mt5data/
+*.log
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+node_modules/

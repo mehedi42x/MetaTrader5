@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# MT5 Web Console - server dependencies (Linux / Render)
+# ---------------------------------------------------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+pydantic>=2.7
+
+# ---------------------------------------------------------------------------
+# ⚠ MetaTrader5 is intentionally NOT listed here.
+#
+# MetaQuotes publishes only win_amd64 wheels (verified on PyPI 2026-09-17:
+#   metatrader5-5.0.6180-cp311-cp311-win_amd64.whl, ... _core.pyd is a Windows PE),
+# so `pip install MetaTrader5` on Render (Ubuntu) fails with:
+#   ERROR: No matching distribution found for MetaTrader5
+# and a requirements.txt entry would break the whole build.
+#
+# Two supported ways to reach a real terminal:
+#   1. Bridge agent on the machine that runs MT5 (Windows, or Linux+Wine)
+#      -> see agents/agent/requirements.txt
+#   2. Run this whole app on the Windows box itself
+#      -> pip install -r requirements-win.txt
+# ---------------------------------------------------------------------------

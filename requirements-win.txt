@@ -1,0 +1,4 @@
+# Windows only: lets the app talk to a local MetaTrader 5 terminal without
+# the Bridge agent. Needs 64-bit Python 3.9-3.13 and MT5 installed.
+-r requirements.txt
+MetaTrader5>=5.0.4560
