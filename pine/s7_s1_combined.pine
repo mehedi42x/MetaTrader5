@@ -15,6 +15,9 @@
 //       ▲ BUY S7 / ▼ SELL S7        (order-block retest entry)
 //       ▲ BUY S1 / ▼ SELL S1        (structure flip entry)
 //       ✖ CLOSE / ⛔ SL / ✔ TP      (why and where the trade was closed)
+//  In the Faithful preset S7 has no hard target: its "block failed" exit IS the stop,
+//  so it prints as ⛔ SL S7 (block). TP labels appear when a TP mode is enabled
+//  (preset "Low drawdown", or Custom with TP = ATR / Risk multiple).
 //  plus SL / TP lines while a position is open and a status panel in the corner.
 //
 //  BACKTEST (2022 XAUUSD M1, 354,628 bars, 0.01 lot, $0.20 per trade)
@@ -197,6 +200,7 @@ bool s7Sell = false
 bool s7SLhit = false
 bool s7TPhit = false
 bool s7Flip = false
+bool s7BlkStop = false
 float s7ExitPx = na
 
 if s7on
@@ -208,7 +212,8 @@ if s7on
             s7dir := 0
             s7ExitPx := open
             s7Flip := true
-            s7lastExit := flipEx ? "S7 closed — structure flip" : "S7 closed — block failed (stop)"
+            s7BlkStop := failEx
+            s7lastExit := flipEx ? "S7 closed — structure flip" : "S7 stopped — order block failed"
     // ── 2. pending limit entries when price returns into the block
     if s7dir == 0
         if pendBull and not na(pBullTop)
@@ -359,8 +364,8 @@ if lblOn and s1Buy
 if lblOn and s1Sell
     f_sell("S1", s1entry, s1stop, s1targ, "  (" + (tag1 == -1 ? "CHoCH" : "BOS") + " " + s1tf + ")")
 if lblOn and (s7Flip or s7SLhit or s7TPhit)
-    f_out(s7SLhit ? "⛔ SL S7" : s7TPhit ? "✔ TP S7" : "✖ CLOSE S7", s7ExitPx, false,
-         s7SLhit ? colSL : s7TPhit ? colTP : color.new(color.gray, 0), high)
+    f_out(s7SLhit or s7BlkStop ? "⛔ SL S7" : s7TPhit ? "✔ TP S7" : "✖ CLOSE S7", s7ExitPx, false,
+         s7SLhit or s7BlkStop ? colSL : s7TPhit ? colTP : color.new(color.gray, 0), high)
 if lblOn and (s1Flip or s1SLhit or s1TPhit)
     f_out(s1SLhit ? "⛔ SL S1" : s1TPhit ? "✔ TP S1" : "✖ CLOSE S1", s1ExitPx, false,
          s1SLhit ? colSL : s1TPhit ? colTP : color.new(color.gray, 0), high)
@@ -442,7 +447,8 @@ alertcondition(s1Buy, "S1 BUY", "S1 BUY — swing structure flip")
 alertcondition(s1Sell, "S1 SELL", "S1 SELL — swing structure flip")
 alertcondition(s7SLhit, "S7 SL", "S7 SL hit — trade closed")
 alertcondition(s7TPhit, "S7 TP", "S7 TP hit — trade closed")
-alertcondition(s7Flip, "S7 CLOSE", "S7 closed by structure flip")
+alertcondition(s7Flip, "S7 CLOSE", "S7 closed (structure flip or block failure)")
+alertcondition(s7BlkStop, "S7 STOP", "S7 stopped — order block failed")
 alertcondition(s1SLhit, "S1 SL", "S1 SL hit — trade closed")
 alertcondition(s1TPhit, "S1 TP", "S1 TP hit — trade closed")
 alertcondition(s1Flip, "S1 CLOSE", "S1 closed by structure flip")
