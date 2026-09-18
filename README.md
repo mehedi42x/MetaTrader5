@@ -38,6 +38,25 @@
 - ৩৫ → ২০ পয়েন্ট করলে লস **অর্ধেকেরও বেশি কমে** (-88% → -41%) ✅
 - কিন্ত ২০ পয়েন্টেও M1-এ লাভ হয় না — কারণ ১,৯০৭ ট্রেড × $2 = $3,814 কস্ট।
 
+## 📈 TradingView — S7 + S1 কম্বাইন্ড সিগন্যাল স্ক্রিপ্ট (Pine)
+
+চার্টে **BUY/SELL** সিগন্যাল, **SL / TP / CLOSE** লেবেল, SL/TP লাইন, স্ট্যাটাস প্যানেল
+আর অ্যালার্ট — সব একসাথে। ফাইল: `pine/s7_s1_combined.pine` (+ স্ট্র্যাটেজি টেস্টার
+ভার্সন `pine/s7_s1_strategy.pine`)। কীভাবে বসাবেন: **`pine/README.md`**
+
+- **S7 = Order Block Retest** (চার্ট TF, M1) — স্ট্রাকচার ব্রেকের পর দাম অর্ডার ব্লকে
+  ফিরে এলে limit এন্ট্রি; এক্সিট = ব্লক ফেল (স্টপ) বা স্ট্রাকচার ফ্লিপ
+- **S1 = Swing Structure Flip** (HTF, M5) — প্রতি BOS/CHoCH-এ পজিশন উল্টে যায়
+
+| সেটিং | ২০২২ P/L | PF | Max DD |
+|---|---|---|---|
+| **Faithful (ডিফল্ট)** | **+$917** | 1.37 | -$167 |
+| Structure stop | +$846 | 1.38 | -$163 |
+| Low drawdown (ATR SL/TP) | +$642 | 1.31 | **-$62** |
+
+⚠️ SL/TP টেস্টে দেখা গেছে: **টার্গেট বসালে লাভ কমে** (S7-এ 2R টার্গেট = +$702 → **-$12**)।
+তাই ডিফল্টে টার্গেট নেই, স্ট্রাকচারই স্টপ। বিস্তারিত: `results/combined_sltp_report.md`
+
 ## 🔀 মাল্টি-সিগন্যাল সিস্টেম — সব স্ট্র্যাটেজি একসাথে, প্রতিটা আলাদা সিগন্যাল
 
 আপনার চাওয়া মতে সব স্ট্র্যাটেজি **একই অ্যাকাউন্টে** চলে, কিন্তু **প্রতিটা নিজের সিগন্যালে
@@ -366,6 +385,7 @@ EMA 9/12 এত বেশি ট্রেড করে (১,৯০৭/মাস)
 │   ├── universal_report.md   # Universal রিপোর্ট
 │   ├── multi_signal.png      # মাল্টি-সিগন্যাল চার্ট
 │   ├── multi_signal_report.md # মাল্টি-সিগন্যাল রিপোর্ট
+│   ├── combined_sltp_report.md # S7+S1 SL/TP ভ্যারিয়েন্ট রিপোর্ট
 │   ├── tf_compare.png        # M1/M3/M5/M15 তুলনা
 │   ├── backtest_report.md    # ফুল রিপোর্ট (কস্ট টেবিল সহ)
 │   └── trades.csv, equity_curve.csv
@@ -377,6 +397,11 @@ EMA 9/12 এত বেশি ট্রেড করে (১,৯০৭/মাস)
 ├── run_s7_s1_combo.py        # S7 + M5 trend ফিল্টার কম্বিনেশন টেস্ট
 ├── run_universal_backtest.py # LuxAlgo Universal Signal Backtester পোর্ট
 ├── run_multi_signal.py       # 🔀 মাল্টি-সিগন্যাল: সব স্ট্র্যাটেজি একসাথে (আলাদা সিগন্যাল)
+├── run_combined_sltp.py      # S7+S1 এ SL/TP বসালে কী হয় (Pine ডিফল্টের প্রমাণ)
+├── pine/                     # 📈 TradingView স্ক্রিপ্ট
+│   ├── s7_s1_combined.pine   # সিগন্যাল + লেবেল + অ্যালার্ট (মূল ফাইল)
+│   ├── s7_s1_strategy.pine   # স্ট্র্যাটেজি টেস্টার ভার্সন
+│   └── README.md             # বসানোর নিয়ম + S7/S1 এর ব্যাখ্যা
 ├── run_all_signals.py        # সব সিগন্যাল = ট্রেড (প্যারালাল পজিশন, নিজের TP/SL)
 ├── run_hybrid_backtest.py    # M1 এন্ট্রি + লস হোল্ড → M5 SL (0.01 লট, 1:1000)
 ├── run_mtf_backtest.py       # M1 ট্রেড + M15 EMA 9/12 দিক ফিল্টার
@@ -393,6 +418,7 @@ python3 run_year_backtest.py    # ২০২২ ফুল ইয়ার SMC ট
 python3 run_s7_s1_combo.py      # S7 + M5 trend ফিল্টার টেস্ট
 python3 run_universal_backtest.py  # Universal Signal Backtester (9/21 EMA + ATR TP/SL)
 python3 run_multi_signal.py     # মাল্টি-সিগন্যাল: S7+S1+S4+S6 একসাথে
+python3 run_combined_sltp.py    # S7+S1 এ SL/TP ভ্যারিয়েন্ট টেস্ট
 python3 run_smc_backtest.py     # LuxAlgo SMC সিস্টেম টেস্ট (S1–S7)
 python3 run_all_signals.py      # সব সিগন্যাল = ট্রেড (প্যারালাল পজিশন)
 python3 run_hybrid_backtest.py  # হাইব্রিড এক্সিট (প্রফিট TP / লস হোল্ড → M5 SL)

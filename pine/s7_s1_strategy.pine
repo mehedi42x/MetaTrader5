@@ -1,0 +1,235 @@
+//@version=5
+// ═══════════════════════════════════════════════════════════════════════════════════
+//  S7 + S1 COMBINED — Strategy Tester version
+//  Same logic as s7_s1_combined.pine, but written with strategy.* orders so you can
+//  verify the numbers in TradingView's Strategy Tester.
+//
+//  Sizing to match our Python backtest: 0.01 lot gold = 1 oz  →  default_qty_value = 1
+//  Costs: the Python test uses a 20-point spread = $0.20 per round trip. TradingView
+//  cannot see the spread, so it is charged as commission: $0.10 per order (in + out).
+//
+//  ⚠ S7 fills: the Python engine (and the indicator) fill the retest with a LIMIT at
+//  the order-block edge. A Pine strategy order placed on the signal bar fills at the
+//  NEXT bar's open, so the strategy version is very slightly different (usually worse).
+//  Use it for a sanity check, not as the final word.
+//
+//  Recommended: XAUUSD, M1 chart, S1 timeframe = 5.
+// ═══════════════════════════════════════════════════════════════════════════════════
+strategy("S7 + S1 Combined (Strategy Tester)", "S7+S1", overlay = true, pyramiding = 2,
+     initial_capital = 10000, default_qty_type = strategy.fixed, default_qty_value = 1,
+     commission_type = strategy.commission.cash_per_order, commission_value = 0.10,
+     calc_on_every_tick = false, process_orders_on_close = false)
+
+// ═══════════════════════════ INPUTS ═══════════════════════════
+s7on = input.bool(true, "Enable S7 (order block retest, chart TF)")
+s7size = input.int(50, "S7 swing structure length", minval = 5)
+s7obLen = input.int(200, "S7 order-block volatility filter (ATR)")
+s7atrLen = input.int(14, "S7 ATR length")
+s7slMode = input.string("Block far side (close)", "S7 stop", options = ["Block far side (close)", "Block far side (touch)", "ATR"])
+s7slMul = input.float(2.0, "S7 SL × ATR", step = 0.1)
+s7tpMode = input.string("None", "S7 target", options = ["None", "ATR"])
+s7tpMul = input.float(4.0, "S7 TP × ATR", step = 0.5)
+
+s1on = input.bool(true, "Enable S1 (structure flip, HTF)")
+s1tf = input.timeframe("5", "S1 timeframe")
+s1size = input.int(50, "S1 swing structure length", minval = 5)
+s1atrLen = input.int(14, "S1 ATR length")
+s1slMode = input.string("None", "S1 stop", options = ["None", "ATR"])
+s1slMul = input.float(2.0, "S1 SL × ATR", step = 0.1)
+s1tpMode = input.string("None", "S1 target", options = ["None", "ATR"])
+s1tpMul = input.float(4.0, "S1 TP × ATR", step = 0.5)
+
+// ═══════════════════ SWING STRUCTURE ENGINE (LuxAlgo port, same as the indicator) ═══════════════════
+f_structure(sz) =>
+    var int legState = 0
+    var float lvlHigh = na
+    var float lvlLow = na
+    var bool crossedH = true
+    var bool crossedL = true
+    var int bias = 0
+    int prevLeg = legState
+    bool newLegHigh = high[sz] > ta.highest(high, sz)
+    bool newLegLow = low[sz] < ta.lowest(low, sz)
+    bool pivotHigh = newLegHigh and prevLeg != 0
+    bool pivotLow = newLegLow and prevLeg != 1
+    if newLegHigh
+        legState := 0
+    else if newLegLow
+        legState := 1
+    if pivotHigh
+        lvlHigh := high[sz]
+        crossedH := false
+    if pivotLow
+        lvlLow := low[sz]
+        crossedL := false
+    int ev = 0
+    int tag = 0
+    if not crossedH and not na(lvlHigh) and close[1] <= lvlHigh[1] and close > lvlHigh
+        tag := bias == -1 ? -1 : 1
+        crossedH := true
+        bias := 1
+        ev := 1
+    if not crossedL and not na(lvlLow) and close[1] >= lvlLow[1] and close < lvlLow
+        tag := bias == 1 ? -1 : 1
+        crossedL := true
+        bias := -1
+        ev := -1
+    [ev, tag, bias, lvlHigh, lvlLow, time]
+
+[ev7, tag7, bias7, lvlH7, lvlL7, t7] = f_structure(s7size)
+
+// order blocks
+float vol7 = ta.atr(s7obLen)
+bool hiVol = (high - low) >= 2 * nz(vol7)
+float pLow = hiVol ? high : low
+float pHigh = hiVol ? low : high
+bool legHigh7 = high[s7size] > ta.highest(high, s7size)
+bool legLow7 = low[s7size] < ta.lowest(low, s7size)
+var array<float> aLow = array.new_float()
+var array<float> aHigh = array.new_float()
+if (legHigh7 or legLow7) and bar_index > 0
+    array.clear(aLow)
+    array.clear(aHigh)
+    if not na(pLow[1])
+        array.push(aLow, pLow[1])
+        array.push(aHigh, pHigh[1])
+array.push(aLow, pLow)
+array.push(aHigh, pHigh)
+
+var float obBullTop = na
+var float obBullBot = na
+var float obBearTop = na
+var float obBearBot = na
+if ev7 != 0 and array.size(aLow) > 0
+    if ev7 == 1
+        int k = array.indexof(aLow, array.min(aLow))
+        obBullBot := array.get(aLow, k)
+        obBullTop := array.get(aHigh, k)
+    else
+        int k = array.indexof(aHigh, array.max(aHigh))
+        obBearTop := array.get(aHigh, k)
+        obBearBot := array.get(aLow, k)
+
+var float pBullTop = na
+var float pBullBot = na
+var float pBearTop = na
+var float pBearBot = na
+var int pEv7 = 0
+
+// ═══════════════════════════ S7 ═══════════════════════════
+var int s7dir = 0
+var float s7stop = na
+var float s7targ = na
+var int s7bar = na
+var bool pendBull = false
+var bool pendBear = false
+float atr7 = ta.atr(s7atrLen)
+bool s7Buy = false
+bool s7Sell = false
+bool s7Close = false
+
+if s7on
+    if s7dir != 0
+        bool flipEx = (s7dir == 1 and pEv7 == -1) or (s7dir == -1 and pEv7 == 1)
+        bool failEx = s7slMode == "Block far side (close)" and s7bar < bar_index - 1 and ((s7dir == 1 and not na(pBullBot) and close[1] < pBullBot) or (s7dir == -1 and not na(pBearTop) and close[1] > pBearTop))
+        if flipEx or failEx
+            s7dir := 0
+            s7Close := true
+    if s7dir == 0
+        if pendBull and not na(pBullTop) and low <= pBullTop
+            s7dir := 1
+            s7bar := bar_index
+            pendBull := false
+            s7Buy := true
+            s7stop := s7slMode == "ATR" ? close - s7slMul * nz(atr7[1]) : pBullBot
+            s7targ := s7tpMode == "ATR" ? close + s7tpMul * nz(atr7[1]) : na
+        else if pendBear and not na(pBearTop) and high >= pBearTop
+            s7dir := -1
+            s7bar := bar_index
+            pendBear := false
+            s7Sell := true
+            s7stop := s7slMode == "ATR" ? close + s7slMul * nz(atr7[1]) : pBearBot
+            s7targ := s7tpMode == "ATR" ? close - s7tpMul * nz(atr7[1]) : na
+        else if pendBull and not na(pBullBot) and close < pBullBot
+            pendBull := false
+        else if pendBear and not na(pBearTop) and close > pBearTop
+            pendBear := false
+        if s7dir == 0 and pEv7 != 0
+            pendBull := pEv7 == 1
+            pendBear := pEv7 == -1
+    if s7dir != 0 and s7bar < bar_index
+        if s7dir == 1
+            if s7slMode != "Block far side (close)" and not na(s7stop) and low <= s7stop
+                s7dir := 0
+                s7Close := true
+            else if not na(s7targ) and high >= s7targ
+                s7dir := 0
+                s7Close := true
+        else
+            if s7slMode != "Block far side (close)" and not na(s7stop) and high >= s7stop
+                s7dir := 0
+                s7Close := true
+            else if not na(s7targ) and low <= s7targ
+                s7dir := 0
+                s7Close := true
+
+// ═══════════════════════════ S1 ═══════════════════════════
+[ev1, tag1, bias1, lvlH1, lvlL1, tHTF] = request.security(syminfo.tickerid, s1tf,
+     f_structure(s1size), lookahead = barmerge.lookahead_off)
+float atr1 = request.security(syminfo.tickerid, s1tf, ta.atr(s1atrLen), lookahead = barmerge.lookahead_off)
+var int lastHTF = 0
+bool newHTF = tHTF != lastHTF
+if newHTF
+    lastHTF := tHTF
+
+var int s1dir = 0
+var float s1stop = na
+var float s1targ = na
+bool s1Buy = false
+bool s1Sell = false
+bool s1Close = false
+
+if s1on and newHTF and ev1 != 0 and s1dir != ev1
+    if s1dir != 0
+        s1Close := true
+    s1dir := ev1
+    s1Buy := ev1 == 1
+    s1Sell := ev1 == -1
+    s1stop := s1slMode == "ATR" ? close - ev1 * s1slMul * nz(atr1) : na
+    s1targ := s1tpMode == "ATR" ? close + ev1 * s1tpMul * nz(atr1) : na
+
+if s1on and s1dir != 0
+    if s1dir == 1 and ((not na(s1stop) and low <= s1stop) or (not na(s1targ) and high >= s1targ))
+        s1dir := 0
+        s1Close := true
+    else if s1dir == -1 and ((not na(s1stop) and high >= s1stop) or (not na(s1targ) and low <= s1targ))
+        s1dir := 0
+        s1Close := true
+
+// snapshot
+pBullTop := obBullTop
+pBullBot := obBullBot
+pBearTop := obBearTop
+pBearBot := obBearBot
+pEv7 := ev7
+
+// ═══════════════════════════ ORDERS ═══════════════════════════
+if s7on
+    if s7Buy
+        strategy.entry("S7", strategy.long)
+    if s7Sell
+        strategy.entry("S7", strategy.short)
+    if s7Close
+        strategy.close("S7")
+if s1on
+    if s1Buy
+        strategy.entry("S1", strategy.long)
+    if s1Sell
+        strategy.entry("S1", strategy.short)
+    if s1Close
+        strategy.close("S1")
+
+plot(obBullTop, "S7 bull OB top", color = color.new(color.teal, 0), style = plot.style_stepline)
+plot(obBullBot, "S7 bull OB bottom", color = color.new(color.teal, 60), style = plot.style_stepline)
+plot(obBearTop, "S7 bear OB top", color = color.new(color.red, 60), style = plot.style_stepline)
+plot(obBearBot, "S7 bear OB bottom", color = color.new(color.red, 0), style = plot.style_stepline)

@@ -1,0 +1,462 @@
+//@version=5
+// ═══════════════════════════════════════════════════════════════════════════════════
+//  S7 + S1 COMBINED — Smart Money Concepts signals (XAUUSD)
+//  ──────────────────────────────────────────────────────────────────────────────────
+//  S7 = ORDER BLOCK RETEST   → chart timeframe (M1 in the backtest)
+//       After a swing-structure break (BOS/CHoCH) the order block that produced the
+//       break is stored. When price comes back and touches that block, we take the
+//       trade. Exit = the block fails, or the structure flips.
+//
+//  S1 = SWING STRUCTURE FLIP → higher timeframe (M5 in the backtest)
+//       Every swing-structure break (BOS/CHoCH) reverses the position: a bullish
+//       break buys, a bearish break sells. Always in the market while enabled.
+//
+//  Both run at the same time and print their own labels, so the chart shows:
+//       ▲ BUY S7 / ▼ SELL S7        (order-block retest entry)
+//       ▲ BUY S1 / ▼ SELL S1        (structure flip entry)
+//       ✖ CLOSE / ⛔ SL / ✔ TP      (why and where the trade was closed)
+//  plus SL / TP lines while a position is open and a status panel in the corner.
+//
+//  BACKTEST (2022 XAUUSD M1, 354,628 bars, 0.01 lot, $0.20 per trade)
+//       S7 alone (M1)      +$702.06   PF 1.67   DD  -$40
+//       S1 alone (M5)      +$214.96   PF 1.15   DD -$231
+//       S7 + S1 together   +$917.02   PF 1.37   DD -$167   (7 of 12 months green)
+//  Structure / order-block logic ported from "Smart Money Concepts [LuxAlgo]"
+//  (CC BY-NC-SA 4.0, © LuxAlgo). This is a SIGNAL tool, not an autotrader.
+//
+//  Recommended: XAUUSD chart on M1, S1 timeframe = 5, alerts ON.
+// ═══════════════════════════════════════════════════════════════════════════════════
+indicator("S7 + S1 Combined — SMC OB Retest + Swing Flip", "S7+S1", overlay = true,
+     max_labels_count = 500, max_lines_count = 500, max_boxes_count = 200)
+
+// ═══════════════════════════════ INPUTS ═══════════════════════════════
+gGen = "① General"
+preset = input.string("Faithful (2022: +$917 / DD -$167)", "Preset",
+     options = ["Faithful (2022: +$917 / DD -$167)",
+                "Structure stop (2022: +$846 / DD -$163)",
+                "Low drawdown (2022: +$642 / DD -$62)",
+                "Custom (use the inputs below)"], group = gGen,
+     tooltip = "These are the four configurations that were actually backtested on 2022 data. " +
+               "'Faithful' = the exact rules that produced +$917.")
+lblOn = input.bool(true, "Show entry / exit labels", group = gGen)
+lineOn = input.bool(true, "Show SL / TP lines", group = gGen)
+obOn = input.bool(true, "Show the active order blocks", group = gGen)
+tblOn = input.bool(true, "Show the status panel", group = gGen)
+
+gS7 = "② S7 — Order Block Retest (chart timeframe)"
+s7on = input.bool(true, "Enable S7", group = gS7)
+s7size = input.int(50, "Swing structure length", minval = 5, group = gS7,
+     tooltip = "LuxAlgo default is 50. Smaller = more breaks, more trades.")
+s7obLen = input.int(200, "Order-block volatility filter (ATR length)", minval = 10, group = gS7)
+s7atrLen = input.int(14, "ATR length for stops / targets", minval = 2, group = gS7)
+s7sl = input.string("Block far side (close)", "Stop loss", group = gS7,
+     options = ["Block far side (close)", "Block far side (touch)", "ATR", "None"],
+     tooltip = "Backtest: close-based block stop +$702 (PF 1.67) | touch stop +$632 (PF 1.79) | ATR 2.0 +$597")
+s7slMul = input.float(2.0, "SL × ATR", step = 0.1, minval = 0.1, group = gS7)
+s7tp = input.string("None (let the structure decide)", "Take profit", group = gS7,
+     options = ["None (let the structure decide)", "ATR", "Risk multiple (R)"],
+     tooltip = "Backtest warning: a 2R target turned +$702 into -$12. The winners must run.")
+s7tpMul = input.float(4.0, "TP × ATR / R", step = 0.5, minval = 0.1, group = gS7)
+
+gS1 = "③ S1 — Swing Structure Flip (higher timeframe)"
+s1on = input.bool(true, "Enable S1", group = gS1)
+s1tf = input.timeframe("5", "Signal timeframe", group = gS1)
+s1size = input.int(50, "Swing structure length", minval = 5, group = gS1)
+s1atrLen = input.int(14, "ATR length for stops / targets", minval = 2, group = gS1)
+s1sl = input.string("None (flip only)", "Stop loss", group = gS1,
+     options = ["None (flip only)", "ATR"],
+     tooltip = "Backtest: no stop +$215 (DD -$231) | ATR 2.0 stop +$141 (DD -$156)")
+s1slMul = input.float(2.0, "SL × ATR", step = 0.1, minval = 0.1, group = gS1)
+s1tp = input.string("None (flip only)", "Take profit", group = gS1,
+     options = ["None (flip only)", "ATR"],
+     tooltip = "Backtest: no TP +$215 (DD -$231) | ATR 4.0 TP +$216 (DD -$127) — same profit, smaller drawdown")
+s1tpMul = input.float(4.0, "TP × ATR", step = 0.5, minval = 0.1, group = gS1)
+
+gCol = "④ Colors"
+colBuy = input.color(color.new(#089981, 0), "Buy", group = gCol)
+colSell = input.color(color.new(#f23645, 0), "Sell", group = gCol)
+colSL = input.color(color.new(#f23645, 25), "Stop", group = gCol)
+colTP = input.color(color.new(#089981, 25), "Target", group = gCol)
+
+// ═══════════════════════════ PRESET RESOLUTION ═══════════════════════════
+lowDD = preset == "Low drawdown (2022: +$642 / DD -$62)"
+strStop = preset == "Structure stop (2022: +$846 / DD -$163)"
+custom = preset == "Custom (use the inputs below)"
+
+s7slMode = custom ? s7sl : lowDD ? "ATR" : strStop ? "Block far side (touch)" : "Block far side (close)"
+s7tpMode = custom ? s7tp : lowDD ? "ATR" : "None (let the structure decide)"
+s1slMode = custom ? s1sl : lowDD ? "ATR" : "None (flip only)"
+s1tpMode = custom ? s1tp : lowDD ? "ATR" : "None (flip only)"
+
+// ═══════════════════════ SWING STRUCTURE ENGINE (LuxAlgo port) ═══════════════════════
+// leg(size) + getCurrentStructure() + displayStructure() in one call.
+// Returns: event (+1 bull break / -1 bear break / 0), tag (1 = BOS, -1 = CHoCH),
+//          bias, last swing high level, last swing low level, bar time.
+// Everything is known at the close of the bar that returns it (no lookahead).
+f_structure(sz) =>
+    var int legState = 0          // 0 = bearish leg, 1 = bullish leg
+    var float lvlHigh = na        // last confirmed swing high
+    var float lvlLow = na         // last confirmed swing low
+    var bool crossedH = true
+    var bool crossedL = true
+    var int bias = 0
+    int prevLeg = legState
+    bool newLegHigh = high[sz] > ta.highest(high, sz)
+    bool newLegLow = low[sz] < ta.lowest(low, sz)
+    bool pivotHigh = newLegHigh and prevLeg != 0
+    bool pivotLow = newLegLow and prevLeg != 1
+    if newLegHigh
+        legState := 0
+    else if newLegLow
+        legState := 1
+    if pivotHigh
+        lvlHigh := high[sz]
+        crossedH := false
+    if pivotLow
+        lvlLow := low[sz]
+        crossedL := false
+    int ev = 0
+    int tag = 0
+    if not crossedH and not na(lvlHigh) and close[1] <= lvlHigh[1] and close > lvlHigh
+        tag := bias == -1 ? -1 : 1
+        crossedH := true
+        bias := 1
+        ev := 1
+    if not crossedL and not na(lvlLow) and close[1] >= lvlLow[1] and close < lvlLow
+        tag := bias == 1 ? -1 : 1
+        crossedL := true
+        bias := -1
+        ev := -1
+    [ev, tag, bias, lvlHigh, lvlLow, time]
+
+[ev7, tag7, bias7, lvlH7, lvlL7, t7] = f_structure(s7size)
+
+// ── order blocks: on every break store the bar with the most extreme parsed
+//    high/low between the start of the leg and the break (LuxAlgo storeOrdeBlock)
+float vol7 = ta.atr(s7obLen)
+bool hiVol = (high - low) >= 2 * nz(vol7)
+float pLow = hiVol ? high : low           // LuxAlgo "parsed" high/low
+float pHigh = hiVol ? low : high
+bool legHigh7 = high[s7size] > ta.highest(high, s7size)
+bool legLow7 = low[s7size] < ta.lowest(low, s7size)
+var array<float> aLow = array.new_float()
+var array<float> aHigh = array.new_float()
+var array<int> aBar = array.new_int()
+if (legHigh7 or legLow7) and bar_index > 0
+    array.clear(aLow)
+    array.clear(aHigh)
+    array.clear(aBar)
+    if not na(pLow[1])
+        array.push(aLow, pLow[1])
+        array.push(aHigh, pHigh[1])
+        array.push(aBar, bar_index - 1)
+array.push(aLow, pLow)
+array.push(aHigh, pHigh)
+array.push(aBar, bar_index)
+
+var float obBullTop = na
+var float obBullBot = na
+var float obBearTop = na
+var float obBearBot = na
+var int obBullBar = na
+var int obBearBar = na
+if ev7 != 0 and array.size(aLow) > 0
+    if ev7 == 1
+        int k = array.indexof(aLow, array.min(aLow))
+        obBullBot := array.get(aLow, k)
+        obBullTop := array.get(aHigh, k)
+        obBullBar := array.get(aBar, k)
+    else
+        int k = array.indexof(aHigh, array.max(aHigh))
+        obBearTop := array.get(aHigh, k)
+        obBearBot := array.get(aLow, k)
+        obBearBar := array.get(aBar, k)
+
+// ── previous bar snapshot: what the engine knew when the last bar closed
+var float pBullTop = na
+var float pBullBot = na
+var float pBearTop = na
+var float pBearBot = na
+var int pEv7 = 0
+
+// ═══════════════════════════ S7 STATE ═══════════════════════════
+var int s7dir = 0
+var float s7entry = na
+var float s7stop = na
+var float s7targ = na
+var int s7bar = na
+var bool pendBull = false
+var bool pendBear = false
+var line s7slLine = na
+var line s7tpLine = na
+var string s7lastExit = "-"
+float atr7 = ta.atr(s7atrLen)
+
+bool s7Buy = false
+bool s7Sell = false
+bool s7SLhit = false
+bool s7TPhit = false
+bool s7Flip = false
+float s7ExitPx = na
+
+if s7on
+    // ── 1. exits that the previous close decided (structure flip / block failure)
+    if s7dir != 0
+        bool flipEx = (s7dir == 1 and pEv7 == -1) or (s7dir == -1 and pEv7 == 1)
+        bool failEx = s7slMode == "Block far side (close)" and s7bar < bar_index - 1 and ((s7dir == 1 and not na(pBullBot) and close[1] < pBullBot) or (s7dir == -1 and not na(pBearTop) and close[1] > pBearTop))
+        if flipEx or failEx
+            s7dir := 0
+            s7ExitPx := open
+            s7Flip := true
+            s7lastExit := flipEx ? "S7 closed — structure flip" : "S7 closed — block failed (stop)"
+    // ── 2. pending limit entries when price returns into the block
+    if s7dir == 0
+        if pendBull and not na(pBullTop)
+            if low <= pBullTop
+                s7dir := 1
+                s7entry := math.min(open, pBullTop)
+                s7bar := bar_index
+                pendBull := false
+                s7Buy := true
+                s7stop := s7slMode == "ATR" ? s7entry - s7slMul * nz(atr7[1]) : s7slMode == "None" ? na : pBullBot
+                float risk = na(s7stop) ? na : s7entry - s7stop
+                s7targ := s7tpMode == "ATR" ? s7entry + s7tpMul * nz(atr7[1]) : s7tpMode == "Risk multiple (R)" and not na(risk) ? s7entry + s7tpMul * risk : na
+            else if not na(pBullBot) and close < pBullBot
+                pendBull := false
+        else if pendBear and not na(pBearTop)
+            if high >= pBearTop
+                s7dir := -1
+                s7entry := math.max(open, pBearTop)
+                s7bar := bar_index
+                pendBear := false
+                s7Sell := true
+                s7stop := s7slMode == "ATR" ? s7entry + s7slMul * nz(atr7[1]) : s7slMode == "None" ? na : pBearBot
+                float risk = na(s7stop) ? na : s7stop - s7entry
+                s7targ := s7tpMode == "ATR" ? s7entry - s7tpMul * nz(atr7[1]) : s7tpMode == "Risk multiple (R)" and not na(risk) ? s7entry - s7tpMul * risk : na
+            else if not na(pBearTop) and close > pBearTop
+                pendBear := false
+        if s7dir == 0 and pEv7 != 0            // a new break arms a new order
+            pendBull := pEv7 == 1
+            pendBear := pEv7 == -1
+    // ── 3. hard stop / target inside the bar (the entry bar itself is skipped:
+    //      a limit fill and that bar's extreme cannot be ordered reliably)
+    if s7dir != 0 and s7bar < bar_index
+        if s7dir == 1
+            if s7slMode != "Block far side (close)" and s7slMode != "None" and not na(s7stop) and low <= s7stop
+                s7dir := 0
+                s7ExitPx := math.min(open, s7stop)
+                s7SLhit := true
+                s7lastExit := "S7 closed — SL"
+            else if not na(s7targ) and high >= s7targ
+                s7dir := 0
+                s7ExitPx := math.max(open, s7targ)
+                s7TPhit := true
+                s7lastExit := "S7 closed — TP"
+        else
+            if s7slMode != "Block far side (close)" and s7slMode != "None" and not na(s7stop) and high >= s7stop
+                s7dir := 0
+                s7ExitPx := math.max(open, s7stop)
+                s7SLhit := true
+                s7lastExit := "S7 closed — SL"
+            else if not na(s7targ) and low <= s7targ
+                s7dir := 0
+                s7ExitPx := math.min(open, s7targ)
+                s7TPhit := true
+                s7lastExit := "S7 closed — TP"
+
+// ═══════════════════════════ S1 (higher timeframe) ═══════════════════════════
+[ev1, tag1, bias1, lvlH1, lvlL1, tHTF] = request.security(syminfo.tickerid, s1tf,
+     f_structure(s1size), lookahead = barmerge.lookahead_off)
+float atr1 = request.security(syminfo.tickerid, s1tf, ta.atr(s1atrLen),
+     lookahead = barmerge.lookahead_off)
+var int lastHTF = 0
+bool newHTF = tHTF != lastHTF
+if newHTF
+    lastHTF := tHTF
+
+var int s1dir = 0
+var float s1entry = na
+var float s1stop = na
+var float s1targ = na
+var int s1bar = na
+var line s1slLine = na
+var line s1tpLine = na
+var string s1lastExit = "-"
+bool s1Buy = false
+bool s1Sell = false
+bool s1SLhit = false
+bool s1TPhit = false
+bool s1Flip = false
+float s1ExitPx = na
+
+if s1on and newHTF and ev1 != 0
+    if s1dir != ev1                              // opposite break: close and reverse
+        if s1dir != 0
+            s1dir := 0
+            s1ExitPx := open
+            s1Flip := true
+            s1lastExit := "S1 closed — structure flip"
+        s1dir := ev1
+        s1entry := open
+        s1bar := bar_index
+        s1stop := s1slMode == "ATR" ? s1entry - ev1 * s1slMul * nz(atr1) : na
+        s1targ := s1tpMode == "ATR" ? s1entry + ev1 * s1tpMul * nz(atr1) : na
+        s1Buy := ev1 == 1
+        s1Sell := ev1 == -1
+
+if s1on and s1dir != 0
+    if s1dir == 1
+        if not na(s1stop) and low <= s1stop
+            s1dir := 0
+            s1ExitPx := math.min(open, s1stop)
+            s1SLhit := true
+            s1lastExit := "S1 closed — SL"
+        else if not na(s1targ) and high >= s1targ
+            s1dir := 0
+            s1ExitPx := math.max(open, s1targ)
+            s1TPhit := true
+            s1lastExit := "S1 closed — TP"
+    else
+        if not na(s1stop) and high >= s1stop
+            s1dir := 0
+            s1ExitPx := math.max(open, s1stop)
+            s1SLhit := true
+            s1lastExit := "S1 closed — SL"
+        else if not na(s1targ) and low <= s1targ
+            s1dir := 0
+            s1ExitPx := math.min(open, s1targ)
+            s1TPhit := true
+            s1lastExit := "S1 closed — TP"
+
+// snapshot for the next bar
+pBullTop := obBullTop
+pBullBot := obBullBot
+pBearTop := obBearTop
+pBearBot := obBearBot
+pEv7 := ev7
+
+// ═══════════════════════════ LABELS ═══════════════════════════
+f_num(float x) => na(x) ? "—" : str.tostring(x, format.mintick)
+f_buy(string who, float px, float st, float tg, string extra) =>
+    label.new(bar_index, low, "▲ BUY " + who + "\n" + f_num(px) + extra,
+         style = label.style_label_up, color = colBuy, textcolor = color.white, size = size.small,
+         tooltip = "Entry " + f_num(px) + "\nSL " + f_num(st) + "\nTP " + f_num(tg))
+f_sell(string who, float px, float st, float tg, string extra) =>
+    label.new(bar_index, high, "▼ SELL " + who + "\n" + f_num(px) + extra,
+         style = label.style_label_down, color = colSell, textcolor = color.white, size = size.small,
+         tooltip = "Entry " + f_num(px) + "\nSL " + f_num(st) + "\nTP " + f_num(tg))
+f_out(string txt, float px, bool up, color col, float y) =>
+    label.new(bar_index, y, txt + "\n" + f_num(px),
+         style = up ? label.style_label_down : label.style_label_up,
+         color = col, textcolor = color.white, size = size.tiny)
+
+if lblOn and s7Buy
+    f_buy("S7", s7entry, s7stop, s7targ, "  ✦ SL " + f_num(s7stop))
+if lblOn and s7Sell
+    f_sell("S7", s7entry, s7stop, s7targ, "  ✦ SL " + f_num(s7stop))
+if lblOn and s1Buy
+    f_buy("S1", s1entry, s1stop, s1targ, "  (" + (tag1 == -1 ? "CHoCH" : "BOS") + " " + s1tf + ")")
+if lblOn and s1Sell
+    f_sell("S1", s1entry, s1stop, s1targ, "  (" + (tag1 == -1 ? "CHoCH" : "BOS") + " " + s1tf + ")")
+if lblOn and (s7Flip or s7SLhit or s7TPhit)
+    f_out(s7SLhit ? "⛔ SL S7" : s7TPhit ? "✔ TP S7" : "✖ CLOSE S7", s7ExitPx, false,
+         s7SLhit ? colSL : s7TPhit ? colTP : color.new(color.gray, 0), high)
+if lblOn and (s1Flip or s1SLhit or s1TPhit)
+    f_out(s1SLhit ? "⛔ SL S1" : s1TPhit ? "✔ TP S1" : "✖ CLOSE S1", s1ExitPx, false,
+         s1SLhit ? colSL : s1TPhit ? colTP : color.new(color.gray, 0), high)
+
+// ═══════════════════════════ SL / TP LINES + ORDER BLOCK BOXES ═══════════════════════════
+if lineOn
+    if (s7Buy or s7Sell) and not na(s7stop)
+        s7slLine := line.new(bar_index, s7stop, bar_index + 30, s7stop, color = colSL, style = line.style_dashed, width = 1)
+    if (s7Buy or s7Sell) and not na(s7targ)
+        s7tpLine := line.new(bar_index, s7targ, bar_index + 30, s7targ, color = colTP, style = line.style_dashed, width = 1)
+    if s7dir == 0
+        if not na(s7slLine)
+            line.delete(s7slLine)
+            s7slLine := na
+        if not na(s7tpLine)
+            line.delete(s7tpLine)
+            s7tpLine := na
+    if s7dir != 0 and not na(s7slLine)
+        line.set_x2(s7slLine, bar_index + 30)
+    if s7dir != 0 and not na(s7tpLine)
+        line.set_x2(s7tpLine, bar_index + 30)
+    if (s1Buy or s1Sell) and not na(s1stop)
+        s1slLine := line.new(bar_index, s1stop, bar_index + 30, s1stop, color = colSL, style = line.style_dotted, width = 1)
+    if (s1Buy or s1Sell) and not na(s1targ)
+        s1tpLine := line.new(bar_index, s1targ, bar_index + 30, s1targ, color = colTP, style = line.style_dotted, width = 1)
+    if s1dir == 0
+        if not na(s1slLine)
+            line.delete(s1slLine)
+            s1slLine := na
+        if not na(s1tpLine)
+            line.delete(s1tpLine)
+            s1tpLine := na
+    if s1dir != 0 and not na(s1slLine)
+        line.set_x2(s1slLine, bar_index + 30)
+    if s1dir != 0 and not na(s1tpLine)
+        line.set_x2(s1tpLine, bar_index + 30)
+
+var box bullBox = na
+var box bearBox = na
+if obOn and s7on and ev7 == 1 and not na(obBullTop)
+    if not na(bullBox)
+        box.delete(bullBox)
+    bullBox := box.new(obBullBar, math.max(obBullTop, obBullBot), bar_index + 10, math.min(obBullTop, obBullBot),
+         border_color = color.new(colBuy, 40), bgcolor = color.new(colBuy, 88))
+if obOn and s7on and ev7 == -1 and not na(obBearTop)
+    if not na(bearBox)
+        box.delete(bearBox)
+    bearBox := box.new(obBearBar, math.max(obBearTop, obBearBot), bar_index + 10, math.min(obBearTop, obBearBot),
+         border_color = color.new(colSell, 40), bgcolor = color.new(colSell, 88))
+
+// ═══════════════════════════ STATUS PANEL ═══════════════════════════
+var table panel = table.new(position.top_right, 3, 7, border_width = 1)
+if tblOn and barstate.islast
+    table.cell(panel, 0, 0, "S7 · OB retest (chart " + timeframe.period + ")", bgcolor = color.new(colBuy, 80), text_size = size.small)
+    table.cell(panel, 1, 0, s7dir == 1 ? "LONG" : s7dir == -1 ? "SHORT" : pendBull ? "pending BUY" : pendBear ? "pending SELL" : "flat",
+         bgcolor = color.new(color.gray, 80), text_size = size.small)
+    table.cell(panel, 2, 0, na(s7entry) ? "—" : f_num(s7entry) + " → " + str.tostring(math.round((close - s7entry) * s7dir, 2)) + "$",
+         bgcolor = color.new(color.gray, 80), text_size = size.small)
+    table.cell(panel, 0, 1, "SL / TP", text_size = size.small)
+    table.cell(panel, 1, 1, f_num(s7stop), text_size = size.small)
+    table.cell(panel, 2, 1, f_num(s7targ), text_size = size.small)
+    table.cell(panel, 0, 2, "Last exit", text_size = size.small)
+    table.cell(panel, 1, 2, s7lastExit, text_size = size.small)
+    table.cell(panel, 2, 2, "S7 bias: " + (bias7 == 1 ? "bull" : bias7 == -1 ? "bear" : "—"), text_size = size.small)
+    table.cell(panel, 0, 4, "S1 · flip (" + s1tf + ")", bgcolor = color.new(colSell, 80), text_size = size.small)
+    table.cell(panel, 1, 4, s1dir == 1 ? "LONG" : s1dir == -1 ? "SHORT" : "flat", text_size = size.small)
+    table.cell(panel, 2, 4, na(s1entry) ? "—" : f_num(s1entry) + " → " + str.tostring(math.round((close - s1entry) * s1dir, 2)) + "$", text_size = size.small)
+    table.cell(panel, 0, 5, "SL / TP", text_size = size.small)
+    table.cell(panel, 1, 5, f_num(s1stop), text_size = size.small)
+    table.cell(panel, 2, 5, f_num(s1targ), text_size = size.small)
+    table.cell(panel, 0, 6, "Last exit", text_size = size.small)
+    table.cell(panel, 1, 6, s1lastExit, text_size = size.small)
+    table.cell(panel, 2, 6, "S1 bias: " + (bias1 == 1 ? "bull" : bias1 == -1 ? "bear" : "—"), text_size = size.small)
+
+// ═══════════════════════════ ALERTS ═══════════════════════════
+alertcondition(s7Buy, "S7 BUY", "S7 BUY — order block retest")
+alertcondition(s7Sell, "S7 SELL", "S7 SELL — order block retest")
+alertcondition(s1Buy, "S1 BUY", "S1 BUY — swing structure flip")
+alertcondition(s1Sell, "S1 SELL", "S1 SELL — swing structure flip")
+alertcondition(s7SLhit, "S7 SL", "S7 SL hit — trade closed")
+alertcondition(s7TPhit, "S7 TP", "S7 TP hit — trade closed")
+alertcondition(s7Flip, "S7 CLOSE", "S7 closed by structure flip")
+alertcondition(s1SLhit, "S1 SL", "S1 SL hit — trade closed")
+alertcondition(s1TPhit, "S1 TP", "S1 TP hit — trade closed")
+alertcondition(s1Flip, "S1 CLOSE", "S1 closed by structure flip")
+alertcondition(s7Buy or s7Sell or s1Buy or s1Sell, "ANY entry", "A new entry signal")
+
+if s7Buy
+    alert("S7 BUY " + syminfo.ticker + " @ " + f_num(s7entry) + " | SL " + f_num(s7stop) + " | TP " + f_num(s7targ), alert.freq_once_per_bar)
+if s7Sell
+    alert("S7 SELL " + syminfo.ticker + " @ " + f_num(s7entry) + " | SL " + f_num(s7stop) + " | TP " + f_num(s7targ), alert.freq_once_per_bar)
+if s1Buy
+    alert("S1 BUY " + syminfo.ticker + " @ " + f_num(s1entry) + " | SL " + f_num(s1stop) + " | TP " + f_num(s1targ), alert.freq_once_per_bar_close)
+if s1Sell
+    alert("S1 SELL " + syminfo.ticker + " @ " + f_num(s1entry) + " | SL " + f_num(s1stop) + " | TP " + f_num(s1targ), alert.freq_once_per_bar_close)
+if s7Flip or s7SLhit or s7TPhit
+    alert(s7lastExit + " @ " + f_num(s7ExitPx), alert.freq_once_per_bar)
+if s1Flip or s1SLhit or s1TPhit
+    alert(s1lastExit + " @ " + f_num(s1ExitPx), alert.freq_once_per_bar_close)
