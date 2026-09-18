@@ -16,14 +16,18 @@ def run_backtest(
     slippage: float = 0.10,    # USD per oz, total extra slippage
     max_lot: float = 5.0,
     min_lot: float = 0.01,
+    exit_mode: str = "sltp",   # "sltp" or "reverse" (exit on opposite signal)
+    fixed_lot: float = 0.10,   # used when exit_mode="reverse"
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Returns (trades, equity_curve, stats). Entry on bar open AFTER signal bar."""
+    """Returns (trades, equity_curve, stats). Entry on bar open AFTER signal bar.
+    exit_mode="reverse": pure crossover system — opposite signal closes the
+    position and opens a new one (always in market), fixed lot, no SL/TP."""
     o = df["open"].to_numpy()
     h = df["high"].to_numpy()
     l = df["low"].to_numpy()
     t = pd.to_datetime(df["time"]).to_numpy()
     sig = df["signal"].to_numpy()
-    atr = df["atr"].to_numpy()
+    atr = df["atr"].to_numpy() if "atr" in df.columns else np.zeros(len(df))
 
     cost_per_oz = spread + slippage
     bal = balance0
@@ -42,7 +46,8 @@ def run_backtest(
             entry_time=pos["entry_time"], exit_time=exit_time,
             direction="LONG" if d == 1 else "SHORT",
             entry=round(pos["entry"], 2), exit=round(exit_price, 2),
-            sl=round(pos["sl"], 2), tp=round(pos["tp"], 2),
+            sl=round(pos.get("sl", float("nan")), 2),
+            tp=round(pos.get("tp", float("nan")), 2),
             lot=round(pos["oz"] / CONTRACT_OZ_PER_LOT, 2),
             pnl=round(pnl, 2), r_multiple=round(r_mult, 2),
             bars_held=int(exit_idx - pos["entry_idx"]),
@@ -50,26 +55,13 @@ def run_backtest(
         ))
         pos = None
 
-    test_mask_start = pd.to_datetime(t) >= pd.to_datetime(test_start)
-
-    for i in range(1, len(df)):
-        # --- manage open position on bar i (SL/TP check; conservative: SL first) ---
-        if pos is not None:
-            d = pos["dir"]
-            if d == 1:
-                hit_sl = l[i] <= pos["sl"]
-                hit_tp = h[i] >= pos["tp"]
-            else:
-                hit_sl = h[i] >= pos["sl"]
-                hit_tp = l[i] <= pos["tp"]
-            if hit_sl:
-                close_pos(pos["sl"], t[i], i, "SL")
-            elif hit_tp:
-                close_pos(pos["tp"], t[i], i, "TP")
-
-        # --- new entry on bar i open from signal on bar i-1 (test window only) ---
-        if pos is None and test_mask_start[i] and sig[i - 1] != 0 and atr[i - 1] > 0:
-            d = int(sig[i - 1])
+    def open_pos(d, i):
+        nonlocal pos
+        if exit_mode == "reverse":
+            oz = fixed_lot * CONTRACT_OZ_PER_LOT
+            pos = dict(dir=d, entry=o[i], oz=oz,
+                       entry_time=t[i], entry_idx=i, risk_usd=0.0)
+        else:
             sl_dist = sl_atr_mult * atr[i - 1]
             tp_dist = tp_atr_mult * atr[i - 1]
             risk_usd = bal * risk_pct / 100.0
@@ -82,17 +74,45 @@ def run_backtest(
                 sl, tp = entry + sl_dist, entry - tp_dist
             pos = dict(dir=d, entry=entry, sl=sl, tp=tp, oz=oz,
                        entry_time=t[i], entry_idx=i, risk_usd=risk_usd)
-            # same-bar resolution (conservative: SL first)
+
+    test_mask_start = pd.to_datetime(t) >= pd.to_datetime(test_start)
+
+    for i in range(1, len(df)):
+        # --- manage open position on bar i (SL/TP check; conservative: SL first) ---
+        if exit_mode == "sltp" and pos is not None:
+            d = pos["dir"]
             if d == 1:
-                hit_sl = l[i] <= sl
-                hit_tp = h[i] >= tp
+                hit_sl = l[i] <= pos["sl"]
+                hit_tp = h[i] >= pos["tp"]
             else:
-                hit_sl = h[i] >= sl
-                hit_tp = l[i] <= tp
+                hit_sl = h[i] >= pos["sl"]
+                hit_tp = l[i] <= pos["tp"]
             if hit_sl:
-                close_pos(sl, t[i], i, "SL")
+                close_pos(pos["sl"], t[i], i, "SL")
             elif hit_tp:
-                close_pos(tp, t[i], i, "TP")
+                close_pos(pos["tp"], t[i], i, "TP")
+
+        # --- signal on bar i-1 traded at bar i open (test window only) ---
+        if test_mask_start[i] and sig[i - 1] != 0 and (exit_mode == "reverse" or atr[i - 1] > 0):
+            d = int(sig[i - 1])
+            if exit_mode == "reverse":
+                if pos is not None and pos["dir"] != d:
+                    close_pos(o[i], t[i], i, "REV")   # close & reverse
+                if pos is None:
+                    open_pos(d, i)
+            elif pos is None:
+                open_pos(d, i)
+                # same-bar SL/TP resolution (conservative: SL first)
+                if d == 1:
+                    hit_sl = l[i] <= pos["sl"]
+                    hit_tp = h[i] >= pos["tp"]
+                else:
+                    hit_sl = h[i] >= pos["sl"]
+                    hit_tp = l[i] <= pos["tp"]
+                if hit_sl:
+                    close_pos(pos["sl"], t[i], i, "SL")
+                elif hit_tp:
+                    close_pos(pos["tp"], t[i], i, "TP")
 
         equity_ts.append(t[i])
         equity_val.append(bal)
@@ -146,4 +166,5 @@ def compute_stats(trades: pd.DataFrame, eq: pd.DataFrame, balance0: float) -> di
         shorts=int((trades.direction == "SHORT").sum()),
         sl_exits=int((trades.exit_reason == "SL").sum()),
         tp_exits=int((trades.exit_reason == "TP").sum()),
+        rev_exits=int((trades.exit_reason == "REV").sum()),
     )

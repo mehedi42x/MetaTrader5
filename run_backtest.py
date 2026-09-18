@@ -1,4 +1,4 @@
-"""Run Gold Trend-Momentum v1 backtest on 1 month of XAUUSD M15 data.
+"""Run pure EMA 9/12 crossover backtest on 1 month of XAUUSD M15 data.
 
 Usage:  python3 run_backtest.py
 """
@@ -15,9 +15,9 @@ from src.backtest import run_backtest
 DATA = "data/xauusd_m15_slice.csv"
 TEST_DAYS = 30
 BALANCE0 = 10_000.0
-RISK_PCT = 1.0
-SPREAD = 0.35      # USD/oz round-trip
-SLIPPAGE = 0.10    # USD/oz
+FIXED_LOT = 0.10       # fixed lot (100 oz = 1.0 lot)
+SPREAD = 0.35          # USD/oz round-trip
+SLIPPAGE = 0.10        # USD/oz
 
 
 def main():
@@ -28,9 +28,9 @@ def main():
     test_bars = int((df["time"] >= test_start).sum())
 
     trades, eq, s = run_backtest(
-        df, test_start, balance0=BALANCE0, risk_pct=RISK_PCT,
-        sl_atr_mult=PARAMS["sl_atr_mult"], tp_atr_mult=PARAMS["tp_atr_mult"],
+        df, test_start, balance0=BALANCE0,
         spread=SPREAD, slippage=SLIPPAGE,
+        exit_mode="reverse", fixed_lot=FIXED_LOT,
     )
     os.makedirs("results", exist_ok=True)
     trades.to_csv("results/trades.csv", index=False)
@@ -51,7 +51,7 @@ def main():
                     color="green", label="Buy", zorder=5)
         ax1.scatter(tt[~longs], trades.loc[~longs, "entry"], marker="v", s=30,
                     color="red", label="Sell", zorder=5)
-    ax1.set_title("XAUUSD M15 — Gold Trend-Momentum v1 (1-month backtest)")
+    ax1.set_title("XAUUSD M15 — EMA 9/12 Crossover ONLY (1-month backtest)")
     ax1.legend(fontsize=8, loc="upper left")
     ax1.grid(alpha=0.3)
 
@@ -74,45 +74,35 @@ def main():
     t0 = pd.to_datetime(df.loc[m, "time"].min())
     t1 = pd.to_datetime(df.loc[m, "time"].max())
     lines = [
-        "# XAUUSD Backtest Report — Gold Trend-Momentum v1 (M15)",
+        "# XAUUSD Backtest Report — EMA 9/12 Crossover ONLY (M15)",
         "",
         f"**Period:** {t0} → {t1} ({TEST_DAYS} days, {test_bars} M15 bars)",
         "**Data:** XAUUSD M15, Dukascopy-sourced (ejtraderLabs/historical-data), last 1 month of file",
-        f"**Starting balance:** ${BALANCE0:,.0f} | **Risk/trade:** {RISK_PCT}% | "
-        f"**SL:** {PARAMS['sl_atr_mult']}xATR | **TP:** {PARAMS['tp_atr_mult']}xATR (1:2 RR) | "
-        f"**Session:** {PARAMS['session_start']:02d}:00-{PARAMS['session_end']:02d}:00 GMT | "
+        f"**Starting balance:** ${BALANCE0:,.0f} | **Lot:** fixed {FIXED_LOT} | "
+        f"**Exit:** opposite crossover (reverse, always in market) | "
         f"**Costs:** spread ${SPREAD}/oz + slippage ${SLIPPAGE}/oz",
         "",
         "## Results (1 month)",
         "",
         f"- Trades: **{s['n_trades']}** (Long {s['longs']} / Short {s['shorts']})",
-        f"- Win rate: **{s['win_rate']}%** ({s['wins']}W / {s['losses']}L; TP exits {s['tp_exits']}, SL exits {s['sl_exits']})",
+        f"- Win rate: **{s['win_rate']}%** ({s['wins']}W / {s['losses']}L)",
         f"- Net P/L: **${s['net_pnl']:,.2f} ({s['return_pct']:+.2f}%)** → End balance ${s['end_balance']:,.2f}",
-        f"- Profit factor: **{s['profit_factor']}** | Expectancy: **${s['expectancy']}/trade** | Avg R: **{s['avg_r']}R**",
+        f"- Profit factor: **{s['profit_factor']}** | Expectancy: **${s['expectancy']}/trade**",
         f"- Avg win ${s['avg_win']} / Avg loss ${s['avg_loss']} | Max win ${s['max_win']} / Max loss ${s['max_loss']}",
         f"- Max drawdown: **${s['max_dd_usd']} ({s['max_dd_pct']}%)** | Sharpe (daily): **{s['sharpe_daily']}**",
         "",
-        "## Strategy rules",
+        "## Strategy rules (crossover ONLY — all other logic removed)",
         "",
-        f"- Trend: Close > EMA{PARAMS['ema_fast']} > EMA{PARAMS['ema_slow']} → LONG only; "
-        f"mirror for SHORT",
-        f"- Trigger: RSI({PARAMS['rsi_period']}) crosses {PARAMS['rsi_mid']:.0f} in trend direction "
-        "(momentum continuation)",
-        "- Signal on bar close → entry next bar open. One position at a time. No martingale/grid/hedging.",
-        "",
-        "## Honesty note (robustness check)",
-        "",
-        "Same settings on adjacent months: Dec-2021 +3.1% (PF 1.18), "
-        "Jan-2022 **-15.0%** (PF 0.47, choppy/range month), Feb-2022 +11.2% (PF 1.77). "
-        "This is a trend-following system: it earns in trending months and bleeds in "
-        "sideways months. One month is a short sample — forward-test on demo before any "
-        "real money, keep risk ≤1%, and consider pausing it in clearly ranging markets.",
+        f"- BUY when EMA{PARAMS['ema_fast']} crosses ABOVE EMA{PARAMS['ema_slow']}; "
+        f"SELL when EMA{PARAMS['ema_fast']} crosses BELOW EMA{PARAMS['ema_slow']}",
+        "- Signal on bar close → entry next bar open. Opposite cross closes & reverses.",
+        "- No RSI, no session filter, no SL/TP. Fixed lot every trade.",
         "",
         "## Files",
         "",
         "- `results/trades.csv` — every trade | `results/equity_curve.csv` — equity | "
         "`results/backtest_chart.png` — price + trades + equity + drawdown",
-        "- `mql5/XAUUSD_GoldTrendMomentum.mq5` — same strategy as a MetaTrader 5 Expert Advisor",
+        "- `mql5/XAUUSD_EmaCross.mq5` — same system as a MetaTrader 5 Expert Advisor",
     ]
     with open("results/backtest_report.md", "w") as f:
         f.write("\n".join(lines) + "\n")
