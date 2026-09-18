@@ -38,6 +38,48 @@
 - ৩৫ → ২০ পয়েন্ট করলে লস **অর্ধেকেরও বেশি কমে** (-88% → -41%) ✅
 - কিন্ত ২০ পয়েন্টেও M1-এ লাভ হয় না — কারণ ১,৯০৭ ট্রেড × $2 = $3,814 কস্ট।
 
+## 🧪 LuxAlgo "Universal Signal Backtester" টেস্ট (৯/২১ EMA + ATR TP/SL)
+
+আপনার দেওয়া দ্বিতীয় LuxAlgo ইন্ডিকেটরটার ডিসিশন লজিক পোর্ট করেছি
+(`run_universal_backtest.py`): predefined cross (ডিফল্ট 9/21 EMA), ATR(14)-ভিত্তিক
+TP1/2/3 (=1/2/3 ATR, ৩ ভাগে partial exit) + SL 1.5/2.5/3.5 ATR, ATR choppiness filter,
+opposite-signal reversal, **এন্ট্রি সিগন্যাল বারের ক্লোজে** (ইন্ডিকেটরের নিজের নিয়ম)।
+
+### 📊 ২০২২ পুরো বছর (0.01 লট, $0.20/ট্রেড)
+
+| প্রিসেট | M1 | M5 | M15 | **H1** |
+|---|---|---|---|---|
+| **9/21 EMA (ডিফল্ট)** | -$3,704 (16,720 trd) | -$866 (3,339) | -$240 (1,048) | **+$68** ✅ |
+| 12/26 EMA | -$2,823 (12,993) | -$652 (2,589) | -$222 (844) | +$13 |
+| 50/200 SMA | -$425 (2,309) | -$129 (453) | -$12 (142) | +$8 |
+
+![Universal Signal Backtester](results/universal_signal.png)
+
+### 🔍 যা শিখলাম
+
+**১. ফাস্ট টাইমফ্রেমে কস্টই সব খায়** — M1-এ ১৬,৭২০ ট্রেড → স্প্রেড **$3,344**!
+কস্ট ছাড়াও M1 লস (-$360) — মানে ওই TF-এ সিগন্যালের নিজেরও এজ নেই।
+
+**২. ATR choppiness ফিল্টার ফাস্ট TF-এ বাঁচায়, H1-এ মার** —
+M1: -$3,704 → **-$1,597**, M5: -$866 → **-$403**, M15: -$240 → **-$23**
+(কিন্তু H1-এ wide config-এ -$83!)
+
+**৩. H1-এ বড় টার্গেট দিলে এজ আসে:**
+
+| H1 কনফিগ | P/L | ট্রেড | উইন% | PF | H1 / H2 |
+|---|---|---|---|---|---|
+| ডিফল্ট TP1/2/3 + SL1.5 | +$68 | 263 | 41.8% | 1.09 | +$39 / +$30 |
+| **wide TP 3/6/9 + SL 3.0** 🏆 | **+$256** | 263 | 36.9% | **1.22** | **+$173 / +$78** |
+| stop-only SL2.0 + reversal | +$227 | 263 | 30.4% | 1.19 | +$160 / +$70 |
+| wide + ATR filter | -$83 ❌ | 101 | 36.6% | 0.84 | -$39 / -$51 |
+| wide, long only | +$119 | 132 | 40.9% | 1.25 | +$76 / +$43 |
+
+**টেকঅ্যাওয়ে:** ডিফল্ট সেটিং (1/2/3 ATR টার্গেট) গোল্ডের নয়েজের তুলনায় **খুব ছোট** —
+তাই whipsaw-এ মরে। H1-এ **বড় টার্গেট (3/6/9 ATR) + বড় SL (3.0)** দিলে ২ মাসের
+দুই ভাগেই পজিটিভ (+$173 / +$78)। তবে সেরা ফল S7 order-block retest-এরই (+$702)।
+
+📄 বিস্তারিত: `results/universal_report.md` | `python3 run_universal_backtest.py`
+
 ## 🧪 S7 + S1 (M5 trend) কম্বিনেশন টেস্ট — ফিল্টার **লাভ কমায়**
 
 আপনার প্রশ্ন: S7-এ M5 trend ফিল্টার দিলে improve হয় কি? **উত্তর: না — বেসলাইন S7-ই সেরা।**
@@ -267,6 +309,8 @@ EMA 9/12 এত বেশি ট্রেড করে (১,৯০৭/মাস)
 │   ├── year_report.md        # বছরভিত্তিক রিপোর্ট
 │   ├── s7_s1_combo.png       # S7 + S1 কম্বো চার্ট
 │   ├── s7_s1_report.md       # কম্বো রিপোর্ট
+│   ├── universal_signal.png  # Universal Signal Backtester চার্ট
+│   ├── universal_report.md   # Universal রিপোর্ট
 │   ├── tf_compare.png        # M1/M3/M5/M15 তুলনা
 │   ├── backtest_report.md    # ফুল রিপোর্ট (কস্ট টেবিল সহ)
 │   └── trades.csv, equity_curve.csv
@@ -276,6 +320,7 @@ EMA 9/12 এত বেশি ট্রেড করে (১,৯০৭/মাস)
 ├── run_smc_backtest.py       # SMC সিস্টেমগুলোর ব্যাকটেস্ট (S1–S7)
 ├── run_year_backtest.py      # ২০২২ ফুল ইয়ার টেস্ট (H1/H2 + মাসিক + রোবাস্টনেস)
 ├── run_s7_s1_combo.py        # S7 + M5 trend ফিল্টার কম্বিনেশন টেস্ট
+├── run_universal_backtest.py # LuxAlgo Universal Signal Backtester পোর্ট
 ├── run_all_signals.py        # সব সিগন্যাল = ট্রেড (প্যারালাল পজিশন, নিজের TP/SL)
 ├── run_hybrid_backtest.py    # M1 এন্ট্রি + লস হোল্ড → M5 SL (0.01 লট, 1:1000)
 ├── run_mtf_backtest.py       # M1 ট্রেড + M15 EMA 9/12 দিক ফিল্টার
@@ -290,6 +335,7 @@ pip install -r requirements.txt
 python3 run_backtest.py         # M1 + EMA 9/12 + 20 pts স্প্রেড
 python3 run_year_backtest.py    # ২০২২ ফুল ইয়ার SMC টেস্ট
 python3 run_s7_s1_combo.py      # S7 + M5 trend ফিল্টার টেস্ট
+python3 run_universal_backtest.py  # Universal Signal Backtester (9/21 EMA + ATR TP/SL)
 python3 run_smc_backtest.py     # LuxAlgo SMC সিস্টেম টেস্ট (S1–S7)
 python3 run_all_signals.py      # সব সিগন্যাল = ট্রেড (প্যারালাল পজিশন)
 python3 run_hybrid_backtest.py  # হাইব্রিড এক্সিট (প্রফিট TP / লস হোল্ড → M5 SL)
