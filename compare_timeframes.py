@@ -1,8 +1,8 @@
 """Same EMA 9/12 crossover system on normal candles of different timeframes.
 
-M1 / M3 / M5 / M15 candles are resampled from the same real XAUUSD M1 data, so
-the comparison is apples-to-apples: identical system, identical window, identical
-costs (spread $0.35 + slippage $0.10 per oz, fixed 0.10 lot).
+M1 / M3 / M5 / M15 candles come from the same real XAUUSD M1 data, so the
+comparison is apples-to-apples: identical system, identical window, identical
+costs (spread only, 20 points = $0.20/oz, fixed 0.10 lot).
 
 Usage:  python3 compare_timeframes.py
 """
@@ -20,12 +20,12 @@ M1_DATA = "data/xauusd_m1_slice.csv"
 TFS = [1, 3, 5, 15]
 BALANCE0 = 10_000.0
 FIXED_LOT = 0.10
-SPREAD = 0.35
-SLIPPAGE = 0.10
+SPREAD = 0.20               # 20 points on XAUUSD = $0.20/oz
+SLIPPAGE = 0.00             # spread only
 COST_PER_TRADE = (SPREAD + SLIPPAGE) * FIXED_LOT * 100
 PERIODS = [
     ("Jan-2022 (validation)", "2022-01-01", "2022-01-31 23:59"),
-    ("Feb-2022 (1-month test)", "2022-02-02 23:45", "2022-03-04 23:59"),
+    ("Feb-2022 (last 30 days)", "2022-02-02 16:59", "2022-03-04 23:59"),
 ]
 
 
@@ -80,7 +80,7 @@ def main():
                 label=f"M{tf}: {f['return_pct']:+.1f}% ({f['n_trades']} trd, PF {f['profit_factor']})")
     ax.axhline(BALANCE0, color="k", ls=":", lw=1)
     ax.set_title("EMA 9/12 crossover on normal candles — timeframe comparison "
-                 "(Feb-2022, 0.10 lot, spread $0.35 + slip $0.10)")
+                 "(Feb-2022, 0.10 lot, spread 20 pts = $0.20/oz only)")
     ax.set_ylabel("Equity ($)")
     ax.legend()
     ax.grid(alpha=0.3)

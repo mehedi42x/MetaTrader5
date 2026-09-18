@@ -1,13 +1,14 @@
 //+------------------------------------------------------------------+
-//| XAUUSD_EmaCross.mq5 — Pure EMA 9/12 Crossover (M3 candles)       |
+//| XAUUSD_EmaCross.mq5 — Pure EMA 9/12 Crossover (M1 candles)       |
 //| BUY when EMA9 crosses ABOVE EMA12, SELL on cross BELOW.          |
 //| Opposite cross closes + reverses. Fixed lot. No SL/TP, no RSI,   |
 //| no session filter, no Renko — crossover ONLY.                    |
-//| ATTACH TO: a normal XAUUSD M3 candlestick chart.                 |
+//| ATTACH TO: the ORIGINAL XAUUSD M1 candlestick chart.             |
+//| Costs: broker spread ~20 points ($0.20/oz) assumed.              |
 //+------------------------------------------------------------------+
 #property copyright "MetaTrader5 repo"
 #property version   "3.00"
-#property description "Pure EMA 9/12 crossover for XAUUSD M3 candles. Attach to a normal XAUUSD M3 chart."
+#property description "Pure EMA 9/12 crossover for XAUUSD M1 candles. Attach to the original XAUUSD M1 chart."
 
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -16,7 +17,7 @@ CTrade trade;
 input int      InpEmaFast   = 9;        // EMA fast
 input int      InpEmaSlow   = 12;       // EMA slow
 input double   InpLots      = 0.10;     // Fixed lot
-input double   InpMaxSpreadPoints = 60; // Max spread (points) safety
+input double   InpMaxSpreadPoints = 20; // Max spread (points) safety — 20 pts = $0.20/oz
 input long     InpMagic     = 20250302; // Magic number
 input string   InpTradeComment = "EMAX"; // Order comment
 
