@@ -58,6 +58,7 @@ def bt(df, t0, t1, long_entry, short_entry, long_exit=None, short_exit=None,
     c = df["close"].to_numpy(dtype=float)
     t = pd.to_datetime(df["time"]).to_numpy()
     start = np.searchsorted(t, np.datetime64(pd.to_datetime(t0)))
+    end = np.searchsorted(t, np.datetime64(pd.to_datetime(t1)), side="right")
     le = np.asarray(long_entry, dtype=bool)
     se = np.asarray(short_entry, dtype=bool)
     lx = np.asarray(long_exit, dtype=bool) if long_exit is not None else None
@@ -79,7 +80,7 @@ def bt(df, t0, t1, long_entry, short_entry, long_exit=None, short_exit=None,
                            bars_held=int(idx - pos["idx"]), exit_reason=reason))
         pos = None
 
-    for i in range(1, len(df)):
+    for i in range(1, min(len(df), end)):       # never trade past t1
         if i >= start:
             j = i - 1                       # signal bar = previous close
             if pos is not None and pos["dir"] == 1:
@@ -100,8 +101,9 @@ def bt(df, t0, t1, long_entry, short_entry, long_exit=None, short_exit=None,
         eq_ts.append(t[i])
         eq_val.append(bal)
 
+    last = min(len(df), end) - 1
     if pos is not None:
-        close(float(c[-1]), t[-1], len(df) - 1, "END")
+        close(float(c[last]), t[last], last, "END")
 
     tr = pd.DataFrame(trades)
     eq = pd.DataFrame({"time": pd.to_datetime(eq_ts), "equity": eq_val})
@@ -157,6 +159,7 @@ def bt_ob_retest(df, t0, t1, structure, obs, balance0=BALANCE0):
     l = df["low"].to_numpy(float)
     t = pd.to_datetime(df["time"]).to_numpy()
     start = np.searchsorted(t, np.datetime64(pd.to_datetime(t0)))
+    end = np.searchsorted(t, np.datetime64(pd.to_datetime(t1)), side="right")
 
     # latest bullish / bearish block available at each bar
     ob_bull = np.full(len(df), np.nan)
@@ -196,7 +199,7 @@ def bt_ob_retest(df, t0, t1, structure, obs, balance0=BALANCE0):
                            bars_held=int(idx - pos["idx"]), exit_reason=reason))
         pos = None
 
-    for i in range(1, len(df)):
+    for i in range(1, min(len(df), end)):       # never trade past t1
         if i >= start:
             # exits first (signal from the previous bar's close)
             if pos is not None and pos["dir"] == 1:
@@ -232,8 +235,9 @@ def bt_ob_retest(df, t0, t1, structure, obs, balance0=BALANCE0):
         eq_ts.append(t[i])
         eq_val.append(bal)
 
+    last = min(len(df), end) - 1
     if pos is not None:
-        close(float(c[-1]), t[-1], len(df) - 1, "END")
+        close(float(c[last]), t[last], last, "END")
     tr = pd.DataFrame(trades)
     eq = pd.DataFrame({"time": pd.to_datetime(eq_ts), "equity": eq_val})
     eq = eq[eq.time >= pd.to_datetime(t0)].reset_index(drop=True)

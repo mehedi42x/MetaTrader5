@@ -92,6 +92,7 @@ def bt_hybrid(df, t0, t1, bull5, bear5, balance0=BALANCE0, profit_check="gross",
     sig = df["sig"].to_numpy()
     mtf = df["mtf_dir"].to_numpy() if use_mtf else None
     start = np.searchsorted(t, np.datetime64(pd.to_datetime(t0)))
+    end = np.searchsorted(t, np.datetime64(pd.to_datetime(t1)), side="right")
 
     def mtf_ok(i, d):
         return True if mtf is None else (mtf[i] * d > 0)
@@ -118,7 +119,7 @@ def bt_hybrid(df, t0, t1, bull5, bear5, balance0=BALANCE0, profit_check="gross",
             n_sl += 1
         pos = None
 
-    for i in range(1, len(df)):
+    for i in range(1, min(len(df), end)):        # never trade past t1
         actionable = i >= start
         s = int(sig[i - 1]) if actionable else 0
 
@@ -149,8 +150,9 @@ def bt_hybrid(df, t0, t1, bull5, bear5, balance0=BALANCE0, profit_check="gross",
         eq_ts.append(t[i])
         eq_val.append(bal)
 
+    last = min(len(df), end) - 1
     if pos is not None:
-        close(float(c[-1]), t[-1], len(df) - 1, "END")
+        close(float(c[last]), t[last], last, "END")
 
     tr = pd.DataFrame(trades)
     eq = pd.DataFrame({"time": pd.to_datetime(eq_ts), "equity": eq_val})
@@ -171,10 +173,11 @@ def bt_plain(df, t0, t1, balance0=BALANCE0):
     t = pd.to_datetime(df["time"]).to_numpy()
     sig = df["sig"].to_numpy()
     start = np.searchsorted(t, np.datetime64(pd.to_datetime(t0)))
+    end = np.searchsorted(t, np.datetime64(pd.to_datetime(t1)), side="right")
     bal = balance0
     trades, eq_ts, eq_val = [], [], []
     pos = None
-    for i in range(1, len(df)):
+    for i in range(1, min(len(df), end)):
         if i >= start and sig[i - 1] != 0:
             d = int(sig[i - 1])
             if pos is not None and pos["dir"] != d:
@@ -190,13 +193,14 @@ def bt_plain(df, t0, t1, balance0=BALANCE0):
                 pos = dict(dir=d, entry=o[i], t=t[i], idx=i)
         eq_ts.append(t[i])
         eq_val.append(bal)
+    last = min(len(df), end) - 1
     if pos is not None:
-        bal += (c[-1] - pos["entry"]) * pos["dir"] * OZ - COST
-        trades.append(dict(entry_time=pos["t"], exit_time=t[-1],
+        bal += (c[last] - pos["entry"]) * pos["dir"] * OZ - COST
+        trades.append(dict(entry_time=pos["t"], exit_time=t[last],
                            direction="LONG" if pos["dir"] == 1 else "SHORT",
-                           entry=round(pos["entry"], 2), exit=round(c[-1], 2),
-                           pnl=round((c[-1] - pos["entry"]) * pos["dir"] * OZ - COST, 2),
-                           r_multiple=0.0, bars_held=len(df) - 1 - pos["idx"], exit_reason="END"))
+                           entry=round(pos["entry"], 2), exit=round(c[last], 2),
+                           pnl=round((c[last] - pos["entry"]) * pos["dir"] * OZ - COST, 2),
+                           r_multiple=0.0, bars_held=last - pos["idx"], exit_reason="END"))
     tr = pd.DataFrame(trades)
     eq = pd.DataFrame({"time": pd.to_datetime(eq_ts), "equity": eq_val})
     eq = eq[eq.time >= pd.to_datetime(t0)].reset_index(drop=True)
