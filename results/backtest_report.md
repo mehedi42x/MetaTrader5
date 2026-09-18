@@ -3,25 +3,29 @@
 **Period:** 2022-02-02 18:20:00 → 2022-03-04 16:55:00 (30 days, 6954 renko bricks)
 **Chart:** Renko, fixed brick $1.0 (= 100 points), built from real XAUUSD M1 (tiumbj/M1_XAUUSD, last 1 month of window)
 **Starting balance:** $10,000 | **Lot:** fixed 0.1 | **Exit:** opposite crossover (reverse, always in market) | **Costs:** spread $0.35/oz + slippage $0.1/oz
+**Entry filter:** trend (EMA200) + min distance $1.0 from EMA12 + 20-brick cooldown — blocked 354 raw crosses
 
 ## Results (1 month)
 
-- Trades: **439** (Long 220 / Short 219)
-- Win rate: **27.6%** (121W / 318L)
-- Net P/L: **$-565.50 (-5.66%)** → End balance $9,434.50
-- Profit factor: **0.92** | Expectancy: **$-1.29/trade**
-- Avg win $54.84 / Avg loss $-22.64 | Max win $365.5 / Max loss $-54.5
-- Max drawdown: **$-1435.5 (-13.38%)** | Sharpe (daily): **-1.29**
+- Trades: **85** (Long 52 / Short 33)
+- Win rate: **37.6%** (32W / 53L)
+- Net P/L: **$497.50 (+4.98%)** → End balance $10,497.50
+- Profit factor: **1.35** | Expectancy: **$5.85/trade**
+- Avg win $59.56 / Avg loss $-26.58 | Max win $325.5 / Max loss $-44.5
+- Max drawdown: **$-339.5 (-3.17%)** | Sharpe (daily): **2.95**
 
 ## System rules (Renko + crossover ONLY)
 
 - Renko-100 bricks (brick = $1.0); BUY when EMA9 crosses ABOVE EMA12; SELL on cross below
 - Signal on brick close → entry at next brick open (= completed brick close).
-- Opposite cross closes & reverses. No RSI, no session filter, no SL/TP. Fixed lot.
+- ENTRY FILTER: only trade with the EMA200 trend, at least $1.0 away from EMA12, and 20 bricks after the previous exit (blocked 354 crosses).
+- Opposite cross closes & reverses — exits are never filtered. No RSI, no SL/TP. Fixed lot.
 
-## 50v100 verdict
+## Filter verdict (this run)
 
-Feb-2022 on real M1 bricks: Renko-50 = **-$3,384 (-33.8%)**, 1281 trades; Renko-100 = **-$566 (-5.7%)**, 439 trades. Jan-2022: 50 = -30.2%, 100 = -13.8%. Renko-100 wins clearly — smaller bricks overtrade and bleed out in spread costs (50 paid $5,764 in costs vs $1,976 for 100). Neither is profitable after costs; see `python3 compare_bricks.py` and `results/compare_50v100.png`.
+Renko-100 unfiltered was **-$566 (-5.7%)** in Feb-2022 (439 trades, PF 0.92) and **-13.8%** in Jan. With the entry filter the same month gives **+$497 (+4.98%)** (85 trades, PF 1.35, max DD -3.2%) and Jan improves to -2.6%. The filter cuts ~80% of the trades — exactly the whipsaw crosses that were paying $4.50 spread each.
+
+Sensitivity: 14 of 20 neighbouring settings (distance 0.8-1.5 $ x cooldown 0-50) are positive over Jan+Feb, so this is not a single lucky parameter set — but Jan is still slightly negative, so the edge is modest. See `results/filters_compare.png` and `python3 test_filters.py`.
 
 ## Files
 

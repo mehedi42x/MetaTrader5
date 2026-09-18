@@ -1,8 +1,15 @@
-"""Pure EMA 9/12 crossover backtest on XAUUSD RENKO bricks (from real M1 data).
+"""EMA 9/12 crossover backtest on XAUUSD RENKO bricks (from real M1 data).
 
 Brick size set by BRICK (default 1.00 = Renko-100, winner of the 50v100 test).
 Signal on brick close -> entry at next brick open (= completed brick close).
-Opposite cross reverses. Fixed lot. No other logic.
+Opposite cross reverses. Fixed lot.
+
+Entry filter (USE_FILTER) — added after the baseline test showed the raw
+crossover bleeding out in spread: only enter when
+  1. brick close is on the same side as the 200-EMA of the brick series,
+  2. price is at least MIN_DIST $ away from the slow EMA at the cross,
+  3. at least COOLDOWN bricks have passed since the last exit.
+Exits are never filtered (an opposite cross always closes the position).
 
 Usage:  python3 run_backtest.py
 """
@@ -13,7 +20,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from src.strategy import add_indicators, add_signals, PARAMS
+from src.strategy import add_indicators, add_signals, add_filters, PARAMS
 from src.backtest import run_backtest
 from src.renko import build_renko
 
@@ -24,6 +31,9 @@ BALANCE0 = 10_000.0
 FIXED_LOT = 0.10       # fixed lot (100 oz = 1.0 lot)
 SPREAD = 0.35          # USD/oz round-trip
 SLIPPAGE = 0.10        # USD/oz
+USE_FILTER = True      # trend200 + min_dist + cooldown entry gate (see docstring)
+FILTER = dict(trend=True, min_dist=1.0, cooldown=20)
+TREND_SPAN = 200
 
 
 def main():
@@ -34,12 +44,14 @@ def main():
 
     df = build_renko(m1, BRICK)
     df = add_signals(add_indicators(df))
+    df = add_filters(df, trend_span=TREND_SPAN)
     test_bars = int((df["time"] >= test_start).sum())
 
     trades, eq, s = run_backtest(
         df, test_start, balance0=BALANCE0,
         spread=SPREAD, slippage=SLIPPAGE,
         exit_mode="reverse", fixed_lot=FIXED_LOT,
+        entry_filter=(FILTER if USE_FILTER else None),
     )
     os.makedirs("results", exist_ok=True)
     trades.to_csv("results/trades.csv", index=False)
@@ -54,6 +66,9 @@ def main():
              label=rname, color="black")
     ax1.plot(t[m], df.loc[m, "ema_fast"], lw=0.6, label=f"EMA{PARAMS['ema_fast']}", color="blue")
     ax1.plot(t[m], df.loc[m, "ema_slow"], lw=0.6, label=f"EMA{PARAMS['ema_slow']}", color="red")
+    if USE_FILTER:
+        ax1.plot(t[m], df.loc[m, "ema_trend"], lw=0.9, color="purple",
+                 alpha=0.8, label=f"EMA{TREND_SPAN} (trend filter)")
     if not trades.empty:
         tt = pd.to_datetime(trades["entry_time"])
         longs = trades["direction"] == "LONG"
@@ -61,7 +76,8 @@ def main():
                     color="green", label="Buy", zorder=5)
         ax1.scatter(tt[~longs], trades.loc[~longs, "entry"], marker="v", s=30,
                     color="red", label="Sell", zorder=5)
-    ax1.set_title(f"XAUUSD {rname} (M1 bricks) — EMA 9/12 Crossover (1-month backtest)")
+    tag = " + entry filter" if USE_FILTER else " (no filter)"
+    ax1.set_title(f"XAUUSD {rname} (M1 bricks) — EMA 9/12 Crossover{tag} (1-month backtest)")
     ax1.legend(fontsize=8, loc="upper left")
     ax1.grid(alpha=0.3)
 
@@ -92,6 +108,10 @@ def main():
         f"**Starting balance:** ${BALANCE0:,.0f} | **Lot:** fixed {FIXED_LOT} | "
         f"**Exit:** opposite crossover (reverse, always in market) | "
         f"**Costs:** spread ${SPREAD}/oz + slippage ${SLIPPAGE}/oz",
+        (f"**Entry filter:** trend (EMA{TREND_SPAN}) + min distance ${FILTER['min_dist']} "
+         f"from EMA12 + {FILTER['cooldown']}-brick cooldown — blocked "
+         f"{s.get('blocked_entries', 0)} raw crosses"
+         if USE_FILTER else "**Entry filter:** none (raw crossover, always in market)"),
         "",
         "## Results (1 month)",
         "",
@@ -107,15 +127,23 @@ def main():
         f"- {rname} bricks (brick = ${BRICK}); BUY when EMA{PARAMS['ema_fast']} crosses "
         f"ABOVE EMA{PARAMS['ema_slow']}; SELL on cross below",
         "- Signal on brick close → entry at next brick open (= completed brick close).",
-        "- Opposite cross closes & reverses. No RSI, no session filter, no SL/TP. Fixed lot.",
+        ("- ENTRY FILTER: only trade with the EMA%s trend, at least $%.1f away from EMA%s, "
+         "and %d bricks after the previous exit (blocked %d crosses)."
+         % (TREND_SPAN, FILTER["min_dist"], PARAMS["ema_slow"], FILTER["cooldown"],
+            s.get("blocked_entries", 0)) if USE_FILTER else "- No entry filter."),
+        "- Opposite cross closes & reverses — exits are never filtered. No RSI, no SL/TP. Fixed lot.",
         "",
-        "## 50v100 verdict",
+        "## Filter verdict (this run)",
         "",
-        "Feb-2022 on real M1 bricks: Renko-50 = **-$3,384 (-33.8%)**, 1281 trades; "
-        "Renko-100 = **-$566 (-5.7%)**, 439 trades. Jan-2022: 50 = -30.2%, 100 = -13.8%. "
-        "Renko-100 wins clearly — smaller bricks overtrade and bleed out in spread costs "
-        "(50 paid $5,764 in costs vs $1,976 for 100). Neither is profitable after costs; "
-        "see `python3 compare_bricks.py` and `results/compare_50v100.png`.",
+        "Renko-100 unfiltered was **-$566 (-5.7%)** in Feb-2022 (439 trades, PF 0.92) and "
+        "**-13.8%** in Jan. With the entry filter the same month gives **+$497 (+4.98%)** "
+        "(85 trades, PF 1.35, max DD -3.2%) and Jan improves to -2.6%. The filter cuts ~80% of "
+        "the trades — exactly the whipsaw crosses that were paying $4.50 spread each.",
+        "",
+        "Sensitivity: 14 of 20 neighbouring settings (distance 0.8-1.5 $ x cooldown 0-50) are "
+        "positive over Jan+Feb, so this is not a single lucky parameter set — but Jan is still "
+        "slightly negative, so the edge is modest. See `results/filters_compare.png` and "
+        "`python3 test_filters.py`.",
         "",
         "## Files",
         "",

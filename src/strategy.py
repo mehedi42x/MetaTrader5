@@ -22,6 +22,20 @@ def add_indicators(df: pd.DataFrame, p: dict = PARAMS) -> pd.DataFrame:
     return df
 
 
+def add_filters(df: pd.DataFrame, trend_span: int = 200) -> pd.DataFrame:
+    """Adds the columns needed by the entry filter (see backtest `entry_filter`):
+      ema_trend : EMA of the brick close (higher-timeframe-style trend of the
+                  brick series itself)
+      dist      : |close - EMA12| in $ — how far price has walked from the slow
+                  EMA when the cross happens (real crosses have dist ~1.2 $,
+                  the EMA9-EMA12 gap itself is only ~0.03 $ and useless)
+    """
+    df = df.copy()
+    df["ema_trend"] = ema(df["close"], trend_span)
+    df["dist"] = (df["close"] - df["ema_slow"]).abs()
+    return df
+
+
 def add_signals(df: pd.DataFrame, p: dict = PARAMS) -> pd.DataFrame:
     """Adds 'signal': +1 = bullish cross, -1 = bearish cross, 0 = none.
     Signal on bar CLOSE, traded on NEXT bar OPEN (no lookahead)."""
