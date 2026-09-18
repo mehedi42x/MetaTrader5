@@ -1,6 +1,6 @@
-"""Pure EMA 9/12 crossover backtest on XAUUSD RENKO-50 bricks (from M15 data).
+"""Pure EMA 9/12 crossover backtest on XAUUSD RENKO bricks (from real M1 data).
 
-Renko-50 = fixed $0.50 brick (50 points on 2-digit gold quote).
+Brick size set by BRICK (default 1.00 = Renko-100, winner of the 50v100 test).
 Signal on brick close -> entry at next brick open (= completed brick close).
 Opposite cross reverses. Fixed lot. No other logic.
 
@@ -17,9 +17,9 @@ from src.strategy import add_indicators, add_signals, PARAMS
 from src.backtest import run_backtest
 from src.renko import build_renko
 
-DATA = "data/xauusd_m15_slice.csv"
+DATA = "data/xauusd_m1_slice.csv"
 TEST_DAYS = 30
-BRICK = 0.50           # USD per brick (Renko 50)
+BRICK = 1.00           # USD per brick (Renko 100 = 100 points; winner of 50v100 test)
 BALANCE0 = 10_000.0
 FIXED_LOT = 0.10       # fixed lot (100 oz = 1.0 lot)
 SPREAD = 0.35          # USD/oz round-trip
@@ -27,11 +27,12 @@ SLIPPAGE = 0.10        # USD/oz
 
 
 def main():
-    m15 = pd.read_csv(DATA, parse_dates=["time"])
-    m15 = m15.sort_values("time").reset_index(drop=True)
-    test_start = m15["time"].max() - pd.Timedelta(days=TEST_DAYS)
+    m1 = pd.read_csv(DATA, parse_dates=["time"])
+    m1 = m1.sort_values("time").reset_index(drop=True)
+    test_start = m1["time"].max() - pd.Timedelta(days=TEST_DAYS)
+    rname = f"Renko-{int(BRICK * 100)}"
 
-    df = build_renko(m15, BRICK)
+    df = build_renko(m1, BRICK)
     df = add_signals(add_indicators(df))
     test_bars = int((df["time"] >= test_start).sum())
 
@@ -41,7 +42,6 @@ def main():
         exit_mode="reverse", fixed_lot=FIXED_LOT,
     )
     os.makedirs("results", exist_ok=True)
-    df.to_csv("data/xauusd_renko50_bricks.csv", index=False)
     trades.to_csv("results/trades.csv", index=False)
     eq.to_csv("results/equity_curve.csv", index=False)
 
@@ -51,7 +51,7 @@ def main():
     t = pd.to_datetime(df["time"])
     m = t >= test_start
     ax1.step(t[m], df.loc[m, "close"], where="post", lw=0.7,
-             label="Renko-50", color="black")
+             label=rname, color="black")
     ax1.plot(t[m], df.loc[m, "ema_fast"], lw=0.6, label=f"EMA{PARAMS['ema_fast']}", color="blue")
     ax1.plot(t[m], df.loc[m, "ema_slow"], lw=0.6, label=f"EMA{PARAMS['ema_slow']}", color="red")
     if not trades.empty:
@@ -61,7 +61,7 @@ def main():
                     color="green", label="Buy", zorder=5)
         ax1.scatter(tt[~longs], trades.loc[~longs, "entry"], marker="v", s=30,
                     color="red", label="Sell", zorder=5)
-    ax1.set_title("XAUUSD Renko-50 — EMA 9/12 Crossover ONLY (1-month backtest)")
+    ax1.set_title(f"XAUUSD {rname} (M1 bricks) — EMA 9/12 Crossover (1-month backtest)")
     ax1.legend(fontsize=8, loc="upper left")
     ax1.grid(alpha=0.3)
 
@@ -84,11 +84,11 @@ def main():
     t0 = pd.to_datetime(df.loc[m, "time"].min())
     t1 = pd.to_datetime(df.loc[m, "time"].max())
     lines = [
-        "# XAUUSD Backtest Report — EMA 9/12 on RENKO-50 (M15 source)",
+        f"# XAUUSD Backtest Report — EMA 9/12 on {rname} (real M1 bricks)",
         "",
         f"**Period:** {t0} → {t1} ({TEST_DAYS} days, {test_bars} renko bricks)",
-        "**Chart:** Renko, fixed brick $0.50 (= 50 points), built from XAUUSD M15 "
-        "(Dukascopy-sourced, last 1 month of file)",
+        f"**Chart:** Renko, fixed brick ${BRICK} (= {int(BRICK * 100)} points), built from real XAUUSD M1 "
+        "(tiumbj/M1_XAUUSD, last 1 month of window)",
         f"**Starting balance:** ${BALANCE0:,.0f} | **Lot:** fixed {FIXED_LOT} | "
         f"**Exit:** opposite crossover (reverse, always in market) | "
         f"**Costs:** spread ${SPREAD}/oz + slippage ${SLIPPAGE}/oz",
@@ -104,21 +104,29 @@ def main():
         "",
         "## System rules (Renko + crossover ONLY)",
         "",
-        f"- Renko-50 bricks (brick = ${BRICK}); BUY when EMA{PARAMS['ema_fast']} crosses "
+        f"- {rname} bricks (brick = ${BRICK}); BUY when EMA{PARAMS['ema_fast']} crosses "
         f"ABOVE EMA{PARAMS['ema_slow']}; SELL on cross below",
         "- Signal on brick close → entry at next brick open (= completed brick close).",
         "- Opposite cross closes & reverses. No RSI, no session filter, no SL/TP. Fixed lot.",
         "",
+        "## 50v100 verdict",
+        "",
+        "Feb-2022 on real M1 bricks: Renko-50 = **-$3,384 (-33.8%)**, 1281 trades; "
+        "Renko-100 = **-$566 (-5.7%)**, 439 trades. Jan-2022: 50 = -30.2%, 100 = -13.8%. "
+        "Renko-100 wins clearly — smaller bricks overtrade and bleed out in spread costs "
+        "(50 paid $5,764 in costs vs $1,976 for 100). Neither is profitable after costs; "
+        "see `python3 compare_bricks.py` and `results/compare_50v100.png`.",
+        "",
         "## Files",
         "",
-        "- `data/xauusd_renko50_bricks.csv` — all renko bricks | `results/trades.csv` — every trade",
-        "- `results/equity_curve.csv` — equity | `results/backtest_chart.png` — chart",
-        "- `mql5/XAUUSD_EmaCross.mq5` — EA (attach it to a Renko-50 offline chart in MT5)",
+        "- `results/trades.csv` — every trade | `results/equity_curve.csv` — equity | "
+        "`results/backtest_chart.png` — chart",
+        "- `mql5/XAUUSD_EmaCross.mq5` — EA (attach it to a Renko offline chart in MT5)",
     ]
     with open("results/backtest_report.md", "w") as f:
         f.write("\n".join(lines) + "\n")
     print("\n".join(lines))
-    print("\nSaved results + data/xauusd_renko50_bricks.csv")
+    print("\nSaved: results/trades.csv, results/equity_curve.csv, results/backtest_chart.png, results/backtest_report.md")
 
 
 if __name__ == "__main__":
