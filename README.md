@@ -38,6 +38,42 @@
 - ৩৫ → ২০ পয়েন্ট করলে লস **অর্ধেকেরও বেশি কমে** (-88% → -41%) ✅
 - কিন্ত ২০ পয়েন্টেও M1-এ লাভ হয় না — কারণ ১,৯০৭ ট্রেড × $2 = $3,814 কস্ট।
 
+## 🆕 LuxAlgo Smart Money Concepts (SMC) — নতুন লজিক টেস্ট ✅
+
+আপনার দেওয়া Pine v5 ইন্ডিকেটর **"Smart Money Concepts [LuxAlgo]"** (CC BY-NC-SA 4.0)
+থেকে **ডিসিশন লজিকটা Python-এ পোর্ট করা হয়েছে** (`src/smc.py`) — শুধু ড্রয়িং বাদ:
+- **Swing structure** (size 50): `leg()` fractal pivot → শেষ swing high/low লেভেল
+- **BOS / CHoCH** যখন ক্লোজ ওই লেভেল ক্রস করে + **trend bias** (BULLISH/BEARISH)
+- **Internal structure** (size 5), **premium/discount equilibrium** (50%), **FVG**, **order blocks**
+
+সিগন্যাল ক্লোজড বারে নেওয়া, পরের বারের ওপেনে এন্ট্রি — লুক-অ্যাহেড টেস্ট পাস
+(truncated ডেটায় পুনঃগণনা করে মিলিয়ে দেখা হয়েছে, ০ মিসম্যাচ)।
+
+### 📊 রেজাল্ট (0.01 লট, $0.20/ট্রেড) — প্রথমবার প্রফিটেবল সিস্টেম! 🎉
+
+| সিস্টেম | টাইমফ্রেম | ২ মাস (Jan+Feb) | ট্রেড | উইন% | PF |
+|---|---|---|---|---|---|
+| **S7 order block retest** ⭐ | M1 | **+$263** | 340 | 19.7% | 1.8–2.5 |
+| S7 order block retest | M5 | +$126 | 67 | — | 1.45 |
+| **S1 swing BOS/CHoCH flip** | M5 | **+$300** | 64 | — | 1.89 |
+| S4 internal structure flip | M5 | +$330* | 474 | — | 1.19–1.9 |
+| S6 pullback zone entry | M15 | +$237 | 19 | — | 3.2 |
+| S7 order block retest | M15 | +$11 | 29 | — | 1.04 |
+
+*S4 প্যারামিটারে খুব সেন্সিটিভ (internal size ৫ = ভালো, ৩/৭ = প্রায় শূন্য) — এটা curve-fit।
+
+**S7-এর আসল শক্তি (ট্রেড কোয়ালিটি):** উইন রেট মাত্র ১৯.৭%, কিন্তু **avg win $7.73
+vs avg loss -$0.93** — order block-এ ছোট স্টপ, বড় রানার। ২ মাসে +$263।
+
+![SMC structure](results/smc_structure.png)
+![SMC equity](results/smc_equity.png)
+
+⚠️ **সতর্কতা:** এমএল ২ মাসের ডেটা, ১৯,০০০+ M1 বার, S7-এ ৩৪০ ট্রেড — শক্ত প্রমাণের
+জন্য যথেষ্ট না। spread ২০ পয়েন্ট ধরা হয়েছে, নিউজে গোল্ডের স্প্রেড বাড়ে। আগে
+ডেমোতে টেস্ট করুন। বিস্তারিত: `results/smc_report.md`
+
+চালান: `python3 run_smc_backtest.py`
+
 ## 🆕 "যত সিগন্যাল, তত ট্রেড" সিস্টেম (প্যারালাল পজিশন)
 
 আপনার শেষ চাওয়া: **প্রতিটা সিগন্যালেই ট্রেড নিতে হবে — কোনো সিগন্যাল বাদ যাবে না।**
@@ -156,11 +192,16 @@ EMA 9/12 এত বেশি ট্রেড করে (১,৯০৭/মাস)
 │   ├── mtf_filter.png        # M1+M15 দিক ফিল্টার চার্ট
 │   ├── hybrid_m1_m5.png      # হাইব্রিড এক্সিট চার্ট
 │   ├── every_signal.png      # সব-সিগন্যাল সিস্টেম চার্ট
+│   ├── smc_structure.png     # SMC পোর্টের ভিজ্যুয়াল চেক (BOS/CHoCH)
+│   ├── smc_equity.png        # SMC সিস্টেমগুলোর ইকুইটি
+│   ├── smc_report.md         # SMC রিপোর্ট (রোবাস্টনেস + caveats)
 │   ├── tf_compare.png        # M1/M3/M5/M15 তুলনা
 │   ├── backtest_report.md    # ফুল রিপোর্ট (কস্ট টেবিল সহ)
 │   └── trades.csv, equity_curve.csv
 ├── mql5/XAUUSD_EmaCross.mq5  # MT5 EA — অরিজিনাল M1 চার্টে attach, max spread 20 pts
 ├── run_backtest.py           # মেইন: M1 + EMA 9/12 + 20 pts স্প্রেড
+├── src/smc.py                # LuxAlgo SMC পোর্ট (pivots, BOS/CHoCH, FVG, OB, zones)
+├── run_smc_backtest.py       # SMC সিস্টেমগুলোর ব্যাকটেস্ট (S1–S7)
 ├── run_all_signals.py        # সব সিগন্যাল = ট্রেড (প্যারালাল পজিশন, নিজের TP/SL)
 ├── run_hybrid_backtest.py    # M1 এন্ট্রি + লস হোল্ড → M5 SL (0.01 লট, 1:1000)
 ├── run_mtf_backtest.py       # M1 ট্রেড + M15 EMA 9/12 দিক ফিল্টার
@@ -173,6 +214,7 @@ EMA 9/12 এত বেশি ট্রেড করে (১,৯০৭/মাস)
 ```bash
 pip install -r requirements.txt
 python3 run_backtest.py         # M1 + EMA 9/12 + 20 pts স্প্রেড
+python3 run_smc_backtest.py     # LuxAlgo SMC সিস্টেম টেস্ট (S1–S7)
 python3 run_all_signals.py      # সব সিগন্যাল = ট্রেড (প্যারালাল পজিশন)
 python3 run_hybrid_backtest.py  # হাইব্রিড এক্সিট (প্রফিট TP / লস হোল্ড → M5 SL)
 python3 run_mtf_backtest.py     # M1 ট্রেড + M15 দিক ফিল্টার পরীক্ষা
