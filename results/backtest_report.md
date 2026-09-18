@@ -1,33 +1,35 @@
-# XAUUSD Backtest Report — EMA 9/12 on Renko-100 (real M1 bricks)
+# XAUUSD Backtest Report — EMA 9/12 crossover on M3 candles
 
-**Period:** 2022-02-02 18:20:00 → 2022-03-04 16:55:00 (30 days, 6954 renko bricks)
-**Chart:** Renko, fixed brick $1.0 (= 100 points), built from real XAUUSD M1 (tiumbj/M1_XAUUSD, last 1 month of window)
-**Starting balance:** $10,000 | **Lot:** fixed 0.1 | **Exit:** opposite crossover (reverse, always in market) | **Costs:** spread $0.35/oz + slippage $0.1/oz
-**Entry filter:** trend (EMA200) + min distance $1.0 from EMA12 + 20-brick cooldown — blocked 354 raw crosses
+**Timeframe:** normal candlestick **M3** (built by resampling real XAUUSD M1, tiumbj/M1_XAUUSD)
+**Test period:** 2022-02-02 16:57:00 → 2022-03-04 16:57:00 (30 days, 10071 M3 candles)
+**Balance:** $10,000 | **Lot:** fixed 0.1 | **Exit:** opposite crossover (reverse, always in market) | **Costs:** spread $0.35/oz + slippage $0.1/oz
 
-## Results (1 month)
+## Result (30 days)
 
-- Trades: **85** (Long 52 / Short 33)
-- Win rate: **37.6%** (32W / 53L)
-- Net P/L: **$497.50 (+4.98%)** → End balance $10,497.50
-- Profit factor: **1.35** | Expectancy: **$5.85/trade**
-- Avg win $59.56 / Avg loss $-26.58 | Max win $325.5 / Max loss $-44.5
-- Max drawdown: **$-339.5 (-3.17%)** | Sharpe (daily): **2.95**
+- Trades: **618** (Long 309 / Short 309)
+- Win rate: **22.7%** (140W / 478L)
+- Net P/L: **$-3,062.52 (-30.63%)** → end balance $6,937.48
+- Profit factor: **0.64** | Expectancy: **$-4.96/trade**
+- Avg win $39.42 / avg loss $-17.95
+- Max drawdown: **$-3063.97 (-30.64%)** | Sharpe (daily): **-8.87**
+- Spread+slippage paid: **$2,781.00** (618 trades x $4.50)
 
-## System rules (Renko + crossover ONLY)
+## Full 2-month window (Jan 2 – Mar 4, sanity check)
 
-- Renko-100 bricks (brick = $1.0); BUY when EMA9 crosses ABOVE EMA12; SELL on cross below
-- Signal on brick close → entry at next brick open (= completed brick close).
-- ENTRY FILTER: only trade with the EMA200 trend, at least $1.0 away from EMA12, and 20 bricks after the previous exit (blocked 354 crosses).
-- Opposite cross closes & reverses — exits are never filtered. No RSI, no SL/TP. Fixed lot.
+- Trades: **1306** | Win rate 20.7% | P/L **$-7,560.50 (-75.60%)** | PF 0.54 | max DD -75.95%
 
-## Filter verdict (this run)
+## System rules
 
-Renko-100 unfiltered was **-$566 (-5.7%)** in Feb-2022 (439 trades, PF 0.92) and **-13.8%** in Jan. With the entry filter the same month gives **+$497 (+4.98%)** (85 trades, PF 1.35, max DD -3.2%) and Jan improves to -2.6%. The filter cuts ~80% of the trades — exactly the whipsaw crosses that were paying $4.50 spread each.
+- M3 candles; BUY on EMA9 cross above EMA12, SELL on cross below
+- Signal on candle close → entry at next candle open (no lookahead)
+- Opposite cross closes & reverses. Fixed lot. No SL/TP, no filter, no RSI.
 
-Sensitivity: 14 of 20 neighbouring settings (distance 0.8-1.5 $ x cooldown 0-50) are positive over Jan+Feb, so this is not a single lucky parameter set — but Jan is still slightly negative, so the edge is modest. See `results/filters_compare.png` and `python3 test_filters.py`.
+## Note
+
+This replaces the Renko experiments (see `legacy/`). Renko-100 with a 3-part entry filter had shown +4.98% for Feb-2022, but on plain M3 candles the raw crossover gives the numbers above — compare the trade count and spread cost before choosing.
 
 ## Files
 
-- `results/trades.csv` — every trade | `results/equity_curve.csv` — equity | `results/backtest_chart.png` — chart
-- `mql5/XAUUSD_EmaCross.mq5` — EA (attach it to a Renko offline chart in MT5)
+- `data/xauusd_m3_slice.csv` — M3 candles used here
+- `results/trades.csv`, `results/equity_curve.csv`, `results/backtest_chart.png`
+- `python3 compare_timeframes.py` — M1 vs M3 vs M5 vs M15 on the same system

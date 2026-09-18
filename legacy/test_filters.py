@@ -16,6 +16,10 @@ Filters tested here (entry gate only; exit = opposite cross, unchanged):
 Usage:  python3 test_filters.py
 """
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -148,7 +152,7 @@ def build_gates(df):
 
 
 def main():
-    os.makedirs("results", exist_ok=True)
+    os.makedirs("legacy", exist_ok=True)
     results = {}
     for b in (100, 50):
         df = load_bricks(b / 100.0)
@@ -220,8 +224,8 @@ def main():
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=30, ha="right")
     fig.suptitle("New filter test — real M1 bricks, 0.10 lot, spread $0.35 + slip $0.10", fontsize=12)
     fig.tight_layout()
-    fig.savefig("results/filters_compare.png", dpi=110)
-    print("\nSaved results/filters_compare.png")
+    fig.savefig("legacy/filters_compare.png", dpi=110)
+    print("\nSaved legacy/filters_compare.png")
 
 
 if __name__ == "__main__":

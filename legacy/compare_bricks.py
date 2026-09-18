@@ -6,6 +6,10 @@ spread $0.35/oz + slippage $0.10/oz. Test month Feb-2022 + Jan-2022 validation.
 Usage:  python3 compare_bricks.py
 """
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -40,13 +44,13 @@ def run_one(bricks_df, t0, t1, entry_filter=None):
 def main():
     m1 = pd.read_csv(DATA, parse_dates=["time"]).sort_values("time").reset_index(drop=True)
     print(f"M1 source bars: {len(m1)} ({m1.time.min()} -> {m1.time.max()})\n")
-    os.makedirs("results", exist_ok=True)
+    os.makedirs("legacy", exist_ok=True)
 
     allres, curves = {}, {}
     for b in BRICKS:
         name = f"Renko-{int(b * 100)}"
         rx = add_filters(add_signals(add_indicators(build_renko(m1, b))), TREND_SPAN)
-        rx.to_csv(f"data/xauusd_renko{int(b * 100)}_m1_bricks.csv", index=False)
+        rx.to_csv(f"legacy/xauusd_renko{int(b * 100)}_m1_bricks.csv", index=False)
         print(f"== {name} (brick ${b}) -> {len(rx)} bricks ==")
         for label, t0, t1 in PERIODS:
             for tag, flt in (("unfiltered", None), ("filtered", FILTER)):
@@ -55,7 +59,7 @@ def main():
                 if "Feb" in label:
                     curves[(name, tag)] = eq
                     if tag == "unfiltered":
-                        tr.to_csv(f"results/trades_renko{int(b * 100)}.csv", index=False)
+                        tr.to_csv(f"legacy/trades_renko{int(b * 100)}.csv", index=False)
                 nb = int(((rx.time >= t0) & (rx.time <= t1)).sum())
                 print(f"  {label:24s} {tag:10s}: bricks={nb} trades={s['n_trades']:5d} "
                       f"win={s['win_rate']}% P/L=${s['net_pnl']} ({s['return_pct']}%) "
@@ -116,9 +120,9 @@ def main():
     fig.suptitle("Renko-50 vs Renko-100 — real M1 bricks, Feb-2022, 0.10 lot, "
                  "spread $0.35 + slip $0.10", fontsize=12)
     fig.tight_layout()
-    fig.savefig("results/compare_50v100.png", dpi=120)
+    fig.savefig("legacy/compare_50v100.png", dpi=120)
     plt.close(fig)
-    print("Saved: results/compare_50v100.png (+ trades_renko50/100.csv)")
+    print("Saved: legacy/compare_50v100.png (+ trades_renko50/100.csv)")
 
 if __name__ == "__main__":
     main()

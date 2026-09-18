@@ -1,14 +1,13 @@
 //+------------------------------------------------------------------+
-//| XAUUSD_EmaCross.mq5 — Pure EMA 9/12 Crossover (M15)               |
+//| XAUUSD_EmaCross.mq5 — Pure EMA 9/12 Crossover (M3 candles)       |
 //| BUY when EMA9 crosses ABOVE EMA12, SELL on cross BELOW.          |
 //| Opposite cross closes + reverses. Fixed lot. No SL/TP, no RSI,   |
-//| no session filter — crossover ONLY.                              |
-//| RENKO USE: generate a Renko-50 offline chart with a Renko        |
-//| generator EA, then attach this EA to that offline chart.         |
+//| no session filter, no Renko — crossover ONLY.                    |
+//| ATTACH TO: a normal XAUUSD M3 candlestick chart.                 |
 //+------------------------------------------------------------------+
 #property copyright "MetaTrader5 repo"
-#property version   "2.00"
-#property description "Pure EMA 9/12 crossover for XAUUSD M15. Attach to XAUUSD M15 chart."
+#property version   "3.00"
+#property description "Pure EMA 9/12 crossover for XAUUSD M3 candles. Attach to a normal XAUUSD M3 chart."
 
 #include <Trade/Trade.mqh>
 CTrade trade;
