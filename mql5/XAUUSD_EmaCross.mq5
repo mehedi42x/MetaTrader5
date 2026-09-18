@@ -3,6 +3,8 @@
 //| BUY when EMA9 crosses ABOVE EMA12, SELL on cross BELOW.          |
 //| Opposite cross closes + reverses. Fixed lot. No SL/TP, no RSI,   |
 //| no session filter — crossover ONLY.                              |
+//| RENKO USE: generate a Renko-50 offline chart with a Renko        |
+//| generator EA, then attach this EA to that offline chart.         |
 //+------------------------------------------------------------------+
 #property copyright "MetaTrader5 repo"
 #property version   "2.00"

@@ -1,25 +1,26 @@
-# XAUUSD Backtest Report — EMA 9/12 Crossover ONLY (M15)
+# XAUUSD Backtest Report — EMA 9/12 on RENKO-50 (M15 source)
 
-**Period:** 2022-02-02 23:45:00 → 2022-03-04 23:45:00 (30 days, 2015 M15 bars)
-**Data:** XAUUSD M15, Dukascopy-sourced (ejtraderLabs/historical-data), last 1 month of file
+**Period:** 2022-02-03 01:30:00 → 2022-03-04 23:45:00 (30 days, 8424 renko bricks)
+**Chart:** Renko, fixed brick $0.50 (= 50 points), built from XAUUSD M15 (Dukascopy-sourced, last 1 month of file)
 **Starting balance:** $10,000 | **Lot:** fixed 0.1 | **Exit:** opposite crossover (reverse, always in market) | **Costs:** spread $0.35/oz + slippage $0.1/oz
 
 ## Results (1 month)
 
-- Trades: **109** (Long 55 / Short 54)
-- Win rate: **29.4%** (32W / 77L)
-- Net P/L: **$777.20 (+7.77%)** → End balance $10,777.20
-- Profit factor: **1.3** | Expectancy: **$7.13/trade**
-- Avg win $104.8 / Avg loss $-33.46 | Max win $473.8 / Max loss $-265.4
-- Max drawdown: **$-744.2 (-6.64%)** | Sharpe (daily): **1.61**
+- Trades: **485** (Long 243 / Short 242)
+- Win rate: **36.7%** (178W / 307L)
+- Net P/L: **$2,857.50 (+28.58%)** → End balance $12,857.50
+- Profit factor: **1.54** | Expectancy: **$5.89/trade**
+- Avg win $45.58 / Avg loss $-17.12 | Max win $325.5 / Max loss $-29.5
+- Max drawdown: **$-442.5 (-4.35%)** | Sharpe (daily): **6.83**
 
-## Strategy rules (crossover ONLY — all other logic removed)
+## System rules (Renko + crossover ONLY)
 
-- BUY when EMA9 crosses ABOVE EMA12; SELL when EMA9 crosses BELOW EMA12
-- Signal on bar close → entry next bar open. Opposite cross closes & reverses.
-- No RSI, no session filter, no SL/TP. Fixed lot every trade.
+- Renko-50 bricks (brick = $0.5); BUY when EMA9 crosses ABOVE EMA12; SELL on cross below
+- Signal on brick close → entry at next brick open (= completed brick close).
+- Opposite cross closes & reverses. No RSI, no session filter, no SL/TP. Fixed lot.
 
 ## Files
 
-- `results/trades.csv` — every trade | `results/equity_curve.csv` — equity | `results/backtest_chart.png` — price + trades + equity + drawdown
-- `mql5/XAUUSD_EmaCross.mq5` — same system as a MetaTrader 5 Expert Advisor
+- `data/xauusd_renko50_bricks.csv` — all renko bricks | `results/trades.csv` — every trade
+- `results/equity_curve.csv` — equity | `results/backtest_chart.png` — chart
+- `mql5/XAUUSD_EmaCross.mq5` — EA (attach it to a Renko-50 offline chart in MT5)
