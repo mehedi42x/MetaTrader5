@@ -25,11 +25,14 @@ def run_backtest(
     position and opens a new one (always in market), fixed lot, no SL/TP.
 
     entry_filter (optional) gates NEW ENTRIES only; exits always run:
-      dict(trend=True, min_dist=1.0, cooldown=20)
+      dict(trend=True, min_dist=1.0, cooldown=20, mtf=True)
         trend    : only buy above / sell below column "ema_trend" (EMA200 of the
                    brick series) — needs src.strategy.add_filters()
         min_dist : require column "dist" (|close - EMA12| in $) >= this
         cooldown : minimum number of bars between the previous exit and a new entry
+        mtf      : require column "mtf_dir" (+1/-1 = higher-timeframe trend, e.g. the
+                   M15 EMA9/EMA12 state). Entries must agree with it; needs
+                   src.strategy.add_mtf_direction()
     After a blocked cross the system stays flat until the next cross that passes.
     """
     o = df["open"].to_numpy()
@@ -44,6 +47,8 @@ def run_backtest(
     f_trend = bool(flt.get("trend") and "ema_trend" in df.columns)
     f_dist = flt.get("min_dist") if "dist" in df.columns else None
     f_cool = int(flt.get("cooldown", 0) or 0)
+    f_mtf = bool(flt.get("mtf") and "mtf_dir" in df.columns)
+    mtf_arr = df["mtf_dir"].to_numpy() if f_mtf else None
     trend_arr = df["ema_trend"].to_numpy() if f_trend else None
     dist_arr = df["dist"].to_numpy() if f_dist is not None else None
     close_arr = df["close"].to_numpy()
@@ -60,6 +65,9 @@ def run_backtest(
             n_blocked += 1
             return False
         if f_cool and (i - last_exit_i) < f_cool:
+            n_blocked += 1
+            return False
+        if mtf_arr is not None and mtf_arr[i] * d <= 0:
             n_blocked += 1
             return False
         return True
