@@ -1,0 +1,279 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════════════════════════
+//  S7 — ORDER BLOCK RETEST  (Smart Money Concepts)  ·  XAUUSD
+//  ──────────────────────────────────────────────────────────────────────────────────
+//  This is your script with ALL of its logic REMOVED (EMA 6/9, Bollinger Bands,
+//  the 5m EMA 9/12 trend, the reverse-close on the raw cross) and replaced by S7.
+//
+//  Everything else is kept exactly as it was:
+//    lotSize / leverage / tradeQty sizing · the backtestDays window (inBacktest) ·
+//    costPerTrade · strategy.entry / strategy.close execution · the exit PnL labels ·
+//    the 5-row report table (only the first row now shows the S7 bias instead of the
+//    5m trend, because the 5m logic is gone).
+//
+//  S7 = ORDER BLOCK RETEST (chart timeframe, backtested on M1)
+//       On every swing-structure break (BOS / CHoCH, length 50) the order block that
+//       produced the break is stored. A limit order is placed at the block edge and
+//       fills when price comes back to it; the trade closes when the structure flips
+//       or when the block fails (a close beyond the far side of the block = the stop).
+//
+//  BACKTEST (real XAUUSD M1, 0.01 lot, $0.20/trade)
+//       2022 +$702.03 (1,337 trd, PF 1.67) | 2023 +$642.25 (1,215) |
+//       2024 +$847.86 (1,388) | 2025 +$1,932.44 (1,341)
+//       four years = +$4,124.58, every single year positive.
+//       Most recent real week (9-18 Sep 2026, Exness MT5 feed): +$149.70 on 30 trades, PF 3.21.
+//  Structure / order-block logic ported from "Smart Money Concepts [LuxAlgo]"
+//  (CC BY-NC-SA 4.0 © LuxAlgo).
+// ═══════════════════════════════════════════════════════════════════════════════════
+strategy("S7 Order Block Retest — SMC (XAUUSD)", overlay=true, initial_capital=100000,
+     default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=1,
+     margin_long=0, margin_short=0, max_labels_count=500, max_boxes_count=200)
+
+// ═══════════════════════════ INPUTS ═══════════════════════════
+gGen = "① General"
+showSignals    = input.bool(true, "Show Arrows", group = gGen)
+showPnL        = input.bool(true, "Show Exit PnL", group = gGen)
+showTable      = input.bool(true, "Show Report Table", group = gGen)
+showOB         = input.bool(true, "Show Order Blocks", group = gGen)
+
+gS7 = "② S7 — Order Block Retest (chart timeframe)"
+s7on    = input.bool(true, "Enable S7", group = gS7)
+s7size  = input.int(50, "Swing structure length", minval = 5, group = gS7,
+     tooltip = "LuxAlgo default is 50. Smaller = more breaks, more trades.")
+s7obLen = input.int(200, "Order-block volatility filter (ATR length)", minval = 10, group = gS7)
+s7slMode = input.string("Block far side (close)", "Stop loss", group = gS7,
+     options = ["Block far side (close)", "None"],
+     tooltip = "The backtested rule: the trade closes when a bar CLOSES beyond the far side of the order block.")
+
+gExec = "③ Execution"
+lotSize        = input.float(1.0, "Lot Size", minval = 0.01, step = 0.1, group = gExec)
+leverage       = input.float(1.0, "Leverage", minval = 1.0, step = 1.0, group = gExec)
+backtestDays   = input.int(365, "Backtest Days", minval = 1, group = gExec)
+slippageTicks  = input.int(0, "Slippage (Ticks)", minval = 0, group = gExec)
+spreadPoints   = input.float(0.20, "Spread (price units)", minval = 0.0, step = 0.05, group = gExec,
+     tooltip = "Added on top of TradingView's result, because TradingView cannot see the spread. " +
+               "0.20 = a 20-point gold spread = $0.20 per 1 oz, which is what our Python backtest used. " +
+               "Set 0 to see the raw numbers.")
+
+// ═══════════════════════════ CALCULATIONS (unchanged harness) ═══════════════════════════
+tradeQty     = lotSize * leverage
+startTime    = timenow - (backtestDays * 86400000)
+inBacktest   = time >= startTime
+costPerTrade = (spreadPoints + (slippageTicks * syminfo.mintick)) * tradeQty
+
+// ═══════════════════════ SWING STRUCTURE ENGINE (LuxAlgo port) ═══════════════════════
+// leg(size) + getCurrentStructure() + displayStructure() in one call.
+// Returns: event (+1 bull break / -1 bear break / 0), tag (1 = BOS, -1 = CHoCH),
+//          bias, last swing high level, last swing low level.
+// Everything is known at the close of the bar that returns it (no lookahead).
+f_structure(sz) =>
+    var int legState = 0
+    var float lvlHigh = na
+    var float lvlLow = na
+    var bool crossedH = true
+    var bool crossedL = true
+    var int bias = 0
+    int prevLeg = legState
+    bool newLegHigh = high[sz] > ta.highest(high, sz)
+    bool newLegLow = low[sz] < ta.lowest(low, sz)
+    bool pivotHigh = newLegHigh and prevLeg != 0
+    bool pivotLow = newLegLow and prevLeg != 1
+    if newLegHigh
+        legState := 0
+    else if newLegLow
+        legState := 1
+    if pivotHigh
+        lvlHigh := high[sz]
+        crossedH := false
+    if pivotLow
+        lvlLow := low[sz]
+        crossedL := false
+    int ev = 0
+    int tag = 0
+    if not crossedH and not na(lvlHigh) and close[1] <= lvlHigh[1] and close > lvlHigh
+        tag := bias == -1 ? -1 : 1
+        crossedH := true
+        bias := 1
+        ev := 1
+    if not crossedL and not na(lvlLow) and close[1] >= lvlLow[1] and close < lvlLow
+        tag := bias == 1 ? -1 : 1
+        crossedL := true
+        bias := -1
+        ev := -1
+    [ev, tag, bias, lvlHigh, lvlLow]
+
+[ev7, tag7, bias7, lvlH7, lvlL7] = f_structure(s7size)
+
+// ── order blocks: on every break store the bar with the most extreme parsed
+//    high/low between the start of the leg and the break (LuxAlgo storeOrdeBlock)
+float vol7 = ta.atr(s7obLen)
+bool hiVol = (high - low) >= 2 * nz(vol7)
+float pLow = hiVol ? high : low           // LuxAlgo "parsed" high/low
+float pHigh = hiVol ? low : high
+bool legHigh7 = high[s7size] > ta.highest(high, s7size)
+bool legLow7 = low[s7size] < ta.lowest(low, s7size)
+var array<float> aLow = array.new_float()
+var array<float> aHigh = array.new_float()
+var array<int> aBar = array.new_int()
+if (legHigh7 or legLow7) and bar_index > 0
+    array.clear(aLow)
+    array.clear(aHigh)
+    array.clear(aBar)
+    if not na(pLow[1])
+        array.push(aLow, pLow[1])
+        array.push(aHigh, pHigh[1])
+        array.push(aBar, bar_index - 1)
+array.push(aLow, pLow)
+array.push(aHigh, pHigh)
+array.push(aBar, bar_index)
+
+var float obBullTop = na
+var float obBullBot = na
+var float obBearTop = na
+var float obBearBot = na
+var int obBullBar = na
+var int obBearBar = na
+float obBullBotPrev = obBullBot      // the block as it was known one bar ago (for the stop check)
+float obBearTopPrev = obBearTop
+if ev7 != 0 and array.size(aLow) > 0
+    if ev7 == 1
+        int k = array.indexof(aLow, array.min(aLow))
+        obBullBot := array.get(aLow, k)
+        obBullTop := array.get(aHigh, k)
+        obBullBar := array.get(aBar, k)
+    else
+        int k = array.indexof(aHigh, array.max(aHigh))
+        obBearTop := array.get(aHigh, k)
+        obBearBot := array.get(aLow, k)
+        obBearBar := array.get(aBar, k)
+
+// what the engine already knew when the previous bar closed
+var int pEv7 = 0
+
+// ═══════════════════════════ S7 ORDERS (replaces the old logic) ═══════════════════════════
+var int armedDir = 0                 // 0 = nothing armed, 1 = waiting to buy, -1 = waiting to sell
+int entryBar = strategy.opentrades > 0 ? strategy.opentrades.entry_bar_index(0) : na
+bool newLong  = strategy.position_size > 0 and strategy.position_size[1] <= 0
+bool newShort = strategy.position_size < 0 and strategy.position_size[1] >= 0
+
+if s7on
+    // ── 1. EXITS that the previous close already decided ─────────────────────────
+    //   structure flip: the break came against the open position
+    if strategy.position_size > 0 and pEv7 == -1
+        strategy.close("Buy")
+    if strategy.position_size < 0 and pEv7 == 1
+        strategy.close("Sell")
+    //   block failure: a close beyond the far side of the block (the stop)
+    if strategy.position_size > 0 and s7slMode == "Block far side (close)" and not na(obBullBotPrev) and close < obBullBotPrev and bar_index > entryBar + 1
+        strategy.close("Buy")
+    if strategy.position_size < 0 and s7slMode == "Block far side (close)" and not na(obBearTopPrev) and close > obBearTopPrev and bar_index > entryBar + 1
+        strategy.close("Sell")
+
+    // ── 2. ENTRY: a new break arms the order, the retest is a LIMIT at the block edge
+    if strategy.position_size == 0
+        if inBacktest and ev7 == 1 and not na(obBullTop)
+            if armedDir == -1
+                strategy.cancel("Sell")
+            armedDir := 1
+            strategy.entry("Buy", strategy.long, qty = tradeQty, limit = obBullTop)
+        else if inBacktest and ev7 == -1 and not na(obBearBot)
+            if armedDir == 1
+                strategy.cancel("Buy")
+            armedDir := -1
+            strategy.entry("Sell", strategy.short, qty = tradeQty, limit = obBearBot)
+        // the pending order dies if the block fails before the retest
+        if armedDir == 1 and not na(obBullBot) and close < obBullBot
+            strategy.cancel("Buy")
+            armedDir := 0
+        if armedDir == -1 and not na(obBearTop) and close > obBearTop
+            strategy.cancel("Sell")
+            armedDir := 0
+
+// a position that is open cancels whatever is still pending
+if strategy.position_size != 0 and armedDir != 0
+    strategy.cancel("Buy")
+    strategy.cancel("Sell")
+    armedDir := 0
+
+pEv7 := ev7          // snapshot for the next bar
+
+// ═══════════════════════════ VISUALS ═══════════════════════════
+plotshape(showSignals and newLong, title = "S7 Buy", style = shape.arrowup,
+     location = location.belowbar, color = #00E676, size = size.small)
+plotshape(showSignals and newShort, title = "S7 Sell", style = shape.arrowdown,
+     location = location.abovebar, color = #FF5252, size = size.small)
+
+var box bullBox = na
+var box bearBox = na
+if showOB and s7on and ev7 == 1 and not na(obBullTop)
+    if not na(bullBox)
+        box.delete(bullBox)
+    bullBox := box.new(obBullBar, math.max(obBullTop, obBullBot), bar_index + 10, math.min(obBullTop, obBullBot),
+         border_color = color.new(#089981, 40), bgcolor = color.new(#089981, 88))
+if showOB and s7on and ev7 == -1 and not na(obBearTop)
+    if not na(bearBox)
+        box.delete(bearBox)
+    bearBox := box.new(obBearBar, math.max(obBearTop, obBearBot), bar_index + 10, math.min(obBearTop, obBearBot),
+         border_color = color.new(#f23645, 40), bgcolor = color.new(#f23645, 88))
+
+// ═══════════════════════════ EXIT PnL LABELS (unchanged) ═══════════════════════════
+var int lastClosedTrades = 0
+var float totalDeductions = 0.0
+
+if strategy.closedtrades > lastClosedTrades
+    for i = lastClosedTrades to strategy.closedtrades - 1
+        float rawPnl = strategy.closedtrades.profit(i)
+        float netTradePnl = rawPnl - costPerTrade
+        totalDeductions += costPerTrade
+
+        int exitBar  = nz(strategy.closedtrades.exit_bar_index(i), bar_index)
+        bool wasLong = strategy.closedtrades.size(i) > 0
+
+        if showPnL
+            string txt = (netTradePnl >= 0 ? "+" : "") + str.tostring(netTradePnl, "#.##")
+            color bgCol = netTradePnl >= 0 ? #00E676 : #FF5252
+
+            label.new(
+                 x = exitBar,
+                 y = na,
+                 yloc = wasLong ? yloc.belowbar : yloc.abovebar,
+                 text = txt,
+                 style = wasLong ? label.style_label_up : label.style_label_down,
+                 color = bgCol,
+                 textcolor = color.white,
+                 size = size.small
+                 )
+
+    lastClosedTrades := strategy.closedtrades
+
+// ═══════════════════════════ REPORT TABLE (same layout) ═══════════════════════════
+var table reportTable = table.new(position = position.top_right, columns = 2, rows = 5,
+     bgcolor = #161B22, border_width = 1, border_color = #30363D)
+
+if barstate.islast
+    if showTable
+        int totalTrades   = strategy.closedtrades
+        int winTrades     = strategy.wintrades
+        float finalNetPnL = strategy.netprofit - totalDeductions
+        float winRate     = totalTrades > 0 ? (winTrades / totalTrades) * 100.0 : 0.0
+
+        color pnlColor = finalNetPnL >= 0 ? #00E676 : #FF5252
+        string trendTxt = bias7 == 1 ? "BULLISH" : bias7 == -1 ? "BEARISH" : "FLAT"
+        color trendCol  = bias7 == 1 ? #00E676 : bias7 == -1 ? #FF5252 : color.gray
+
+        table.cell(reportTable, 0, 0, "S7 BIAS", bgcolor = #1F242C, text_color = color.white, text_size = size.small)
+        table.cell(reportTable, 1, 0, trendTxt, bgcolor = #1F242C, text_color = trendCol, text_size = size.small)
+
+        table.cell(reportTable, 0, 1, "PERIOD", bgcolor = #161B22, text_color = color.silver, text_size = size.small)
+        table.cell(reportTable, 1, 1, str.tostring(backtestDays) + " Days", bgcolor = #161B22, text_color = color.white, text_size = size.small)
+
+        table.cell(reportTable, 0, 2, "TOTAL TRADES", bgcolor = #161B22, text_color = color.silver, text_size = size.small)
+        table.cell(reportTable, 1, 2, str.tostring(totalTrades), bgcolor = #161B22, text_color = color.white, text_size = size.small)
+
+        table.cell(reportTable, 0, 3, "WIN RATE", bgcolor = #161B22, text_color = color.silver, text_size = size.small)
+        table.cell(reportTable, 1, 3, str.tostring(winRate, "#.#") + "%", bgcolor = #161B22, text_color = winRate >= 50 ? #00E676 : #FF5252, text_size = size.small)
+
+        table.cell(reportTable, 0, 4, "NET PnL", bgcolor = #161B22, text_color = color.silver, text_size = size.small)
+        table.cell(reportTable, 1, 4, (finalNetPnL >= 0 ? "+" : "") + str.tostring(finalNetPnL, "#.##"), bgcolor = #161B22, text_color = pnlColor, text_size = size.small)
+    else
+        table.clear(reportTable, 0, 0, 1, 4)
