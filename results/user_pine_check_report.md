@@ -138,3 +138,50 @@ whole loss, and the total is still **-$11,149.09** at 1 oz.
 **6. Nothing in the script is wrong.** The crossover, the no-repaint `f_ema(len) => ta.ema(close, len)[1]`
 security call, the delayed trail lock and the PnL labels all behave as written. What makes the
 report look good is the **sizing** (`lotSize * leverage`) and the **zero cost**, not a bug.
+
+## Follow-up: the user's own experiment confirms the model to the cent
+
+The two new screenshots show the same test with **Spread (Points) changed from 0 to 0.2**:
+
+| screenshot | spread input | total trades | win rate | net PnL |
+|---|---|---|---|---|
+| first | 0 | 189 | 52.9% | +1468.1 |
+| second | 0.2 | 189 | 52.9% | **+1090.1** |
+
+**1468.1 - 1090.1 = 378.0**, and `189 trades x (0.2 points x 10 oz) = 189 x $2.00 = $378.00`.
+The drop is exactly the cost line of the script (`costPerTrade = (spreadPoints + slippageTicks *
+mintick) * tradeQty`), which proves two things at once:
+
+1. **tradeQty = lotSize x leverage = 0.01 x 1000 = 10 oz** - the position really is 10 ounces;
+2. the test was already charging the spread at the **house rate** ($0.20 per oz per round trip,
+   i.e. $2.00 per trade at 10 oz) in the second screenshot.
+
+### The same two settings, reproduced here
+
+| variant | trades | net $ | win% |
+|---|---|---|---|
+| my port, 14-18 Sep, 10 oz, spread 0.2 | 255 | +$726.00 | 53.3% |
+| my port, 15-18 Sep (their window), 10 oz, spread 0.2 | 205 | +$731.73 | **52.7%** |
+| their report, 15-18 Sep, 10 oz, spread 0.2 | 189 | +1090.1 | **52.9%** |
+| my port, their window, 1 oz, $0.20/trade | 205 | **+$73.17** | 52.7% |
+
+Their win rate (52.9%) and mine (52.7%) are the same trade logic; the money differs by about
+30% because TradingView's XAUUSD bars and the Exness MT5 bars are not identical (different
+tick aggregation changes both the cross timings and the trailing-stop hits).
+
+### The same exact settings over longer windows (10 oz, $2.00/trade)
+
+| period | trades | net $ | win% | PF | maxDD $ |
+|---|---|---|---|---|---|
+| 2022 | 13,386 | **-$30,308.09** | 28.9% | 0.59 | -$30,487.56 |
+| 2023 | 11,732 | **-$25,095.01** | 26.2% | 0.59 | -$25,098.67 |
+| 2024 | 13,430 | **-$25,754.73** | 32.1% | 0.69 | -$25,969.28 |
+| 2025 | 13,563 | **-$30,333.05** | 41.9% | 0.76 | -$30,567.87 |
+| **2022-2025** | 52,111 | **-$111,490.88** | 32.5% | 0.67 | **-$111,883.42** |
+| Sep 2026 (9-18 Sep) | 364 | +$96.09 | 53.0% | 1.02 | -$1,170.91 |
+
+At 1:1000 the margin for 10 oz is only about **$43.78**, while the four-year drawdown is
+**$111,883** - the margin requirement says nothing about the account size the strategy needs.
+
+**Try it yourself:** keep the two winning inputs exactly as they are (Spread 0.2 is now
+correct) and change only `Backtest Days` from **5 to 365**. That is the whole experiment.
