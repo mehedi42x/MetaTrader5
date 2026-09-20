@@ -42,10 +42,15 @@ TRIGGER, DIST, CAP = 2.0, 1.5, 2.0        # the cBot's defaults, in USD of price
 
 
 def simulate_cbot(d, t0=None, t1=None, trigger=TRIGGER, dist=DIST, cap=CAP,
-                  trail_on=True, path="conservative"):
-    """Port of the cBot. Returns a list of trade dicts."""
+                  trail_on=True, path="conservative", entry_buy=None, entry_sell=None):
+    """Port of the cBot. Returns a list of trade dicts.
+    entry_buy / entry_sell override the entry gate (the exit still uses the raw cut of
+    bull/bear crosses, as the original scripts do)."""
     o, h, l, c, t = d["open"], d["high"], d["low"], d["close"], d["time"]
     bull, bear, hb, hs = d["bull"], d["bear"], d["htf_bull"], d["htf_bear"]
+    # entry gate (may be filtered); the EXIT still uses the raw crosses bull/bear
+    eb = bull if entry_buy is None else entry_buy
+    es = bear if entry_sell is None else entry_sell
     n = len(o)
     win = np.ones(n, bool)
     if t0 is not None:
@@ -131,9 +136,9 @@ def simulate_cbot(d, t0=None, t1=None, trigger=TRIGGER, dist=DIST, cap=CAP,
             pos, stop = 0, np.nan
         # ---------- entries ----------
         if pos == 0:
-            if bull[j] and hb[j] and win[j]:
+            if eb[j] and hb[j] and win[j]:
                 pos, entry, entry_i, sig_i, stop = 1, o[i], i, j, np.nan
-            elif bear[j] and hs[j] and win[j]:
+            elif es[j] and hs[j] and win[j]:
                 pos, entry, entry_i, sig_i, stop = -1, o[i], i, j, np.nan
             if pos != 0 and trail_on:          # ticks start right after the fill
                 trail_update(i, h[i] if pos == 1 else l[i])
