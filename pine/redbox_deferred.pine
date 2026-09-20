@@ -1,0 +1,137 @@
+//@version=6
+// =============================================================================
+//  Trande Hunter — Permanent Stalling Red Box  ·  DEFERRED-ENTRY প্যাচ (ঘরের সংস্করণ)
+//  -----------------------------------------------------------------------------
+//  মূল স্ক্রিপ্টের লজিক অপরিবর্তিত, শুধু একটা জিনিস বদলানো:
+//
+//     আগে : লাল বক্সের ভিতরে সিগন্যাল এলে ট্রেডটাই বাদ  -> win rate বাড়ে,
+//            কিন্তু ট্রেডের সংখ্যা ~৭৪% কমে যায় (৪ বছরে ৫২,১১১ -> ১৩,৪৬৪)।
+//     এখন : সিগন্যাল বাদ যায় না — "pending" হয়ে বসে থাকে, বক্স শেষ হওয়া
+//            মাত্রই সেই সিগন্যালের দিকেই এন্ট্রি হয়।  অর্থাৎ লস-ট্রেড এড়ানো
+//            হয়, কিন্তু ট্রেডের সংখ্যা হারায় না (লাইভ সপ্তাহে ৮১% ট্রেড টিকে
+//            থাকে, win rate ৫৩.৩% -> ৬৫.৫%, net $72.60 -> $174.17 @ ০.০১ লট)।
+//
+//  পাইথন পোর্ট ও পরিমাপ: run_redbox.py  ·  রিপোর্ট: results/redbox_report.md
+//  ⚠️ এই Pine ফাইলটা হাতে লেখা (TradingView-তে কম্পাইল করে দেখা হয়নি) —
+//     পরিমাপ করা হয়েছে Python পোর্টে (একই মেকানিক্স, একই ডেটা)।
+// =============================================================================
+strategy("Trande Hunter - Red Box DEFERRED (house patch)", overlay = true,
+     default_qty_type = strategy.fixed, default_qty_value = 1,
+     initial_capital = 10000, process_orders_on_close = false,
+     commission_type = strategy.commission.percent, commission_value = 0,
+     slippage = 0)
+
+// ---------------------------------------------------------------- inputs ----
+fastLen     = input.int(6,     "Fast EMA (1m)")
+slowLen     = input.int(9,     "Slow EMA (1m)")
+htfTf       = input.timeframe("5", "৫ মিনিট ট্রেন্ড টাইমফ্রেম")
+htfFast     = input.int(9,     "৫মি EMA fast")
+htfSlow     = input.int(12,    "৫মি EMA slow")
+
+failCandles = input.int(3,     "Pivot fail candles", minval = 1)
+zoneRange   = input.float(5.0, "লাল বক্সের উচ্চতা ($)")
+
+trailTrigger = input.float(2.0, "Trail trigger")
+trailDist    = input.float(1.5, "Trail distance")
+trailCap     = input.float(2.0, "Trail cap (max lock)")
+
+lotSize       = input.float(0.01, "Lot size")
+leverage      = input.float(1000, "Leverage")
+backtestDays  = input.int(7,      "Backtest days")
+spreadPoints  = input.float(0.2,  "Spread (points)")
+slippageTicks = input.float(0.0,  "Slippage (ticks)")
+
+// ------------------------------------------------------------ 1m + 5m ------
+emaFast = ta.ema(close, fastLen)
+emaSlow = ta.ema(close, slowLen)
+bull = ta.crossover(emaFast, emaSlow)
+bear = ta.crossunder(emaFast, emaSlow)
+
+// ৫মি ট্রেন্ড — শেষ *ক্লোজড* বার থেকে (রিপেইন্ট করে না)
+f_ema(len) =>
+    request.security(syminfo.tickerid, htfTf, ta.ema(close, len)[1], lookahead = barmerge.lookahead_on)
+htfBull = f_ema(htfFast) > f_ema(htfSlow)
+htfBear = f_ema(htfFast) < f_ema(htfSlow)
+
+// ------------------------------------------------------------ red box ------
+ph = ta.pivothigh(high, 1, failCandles)
+
+var float boxTop    = na
+var float boxBtm    = na
+var bool  boxOn     = false
+var int   boxEndDir = 0            // +1 = উপরে ব্রেক, -1 = নিচে ব্রেক, 0 = কিছু না
+
+boxEndDir := 0
+if not na(ph) and close <= ph and close >= ph - zoneRange
+    boxTop := ph
+    boxBtm := ph - zoneRange
+    boxOn  := true
+
+if boxOn
+    if close > boxTop
+        boxOn := false
+        boxEndDir := 1
+    else if close < boxBtm
+        boxOn := false
+        boxEndDir := -1
+
+insideBox = boxOn and close >= boxBtm and close <= boxTop
+bgcolor(insideBox ? color.new(color.red, 88) : na)
+
+// ------------------------------------------------- deferred entries --------
+var int pending = 0                 // +1 = long অপেক্ষায়, -1 = short অপেক্ষায়
+inBt = time >= timenow - backtestDays * 86400000
+
+if bull and inBt
+    if insideBox
+        pending := 1                // বাদ না দিয়ে ধরে রাখা
+    else
+        pending := 0
+        strategy.entry("L", strategy.long)
+
+if bear and inBt
+    if insideBox
+        pending := -1
+    else
+        pending := 0
+        strategy.entry("S", strategy.short)
+
+// বক্স শেষ হওয়া মাত্র পেন্ডিং অর্ডার ছেড়ে দেওয়া (দিক যেদিকেই হোক)
+if pending != 0 and boxEndDir != 0
+    if pending == 1
+        strategy.entry("L", strategy.long)
+    else
+        strategy.entry("S", strategy.short)
+    pending := 0
+
+// ------------------------------------------------- delayed trailing lock ---
+qty = lotSize * leverage
+costPerTrade = (spreadPoints + slippageTicks * syminfo.mintick) * qty
+entryPx = strategy.position_avg_price
+
+var float trailStop = na
+var bool  trailOn   = false
+
+if strategy.position_size > 0
+    if high >= entryPx + trailTrigger
+        trailOn := true
+    if trailOn
+        trailStop := math.min(math.max(nz(trailStop, entryPx + trailTrigger - trailDist), high - trailDist), entryPx + trailCap)
+    strategy.exit("XL", from_entry = "L", stop = trailStop)
+else if strategy.position_size < 0
+    if low <= entryPx - trailTrigger
+        trailOn := true
+    if trailOn
+        trailStop := math.max(math.min(nz(trailStop, entryPx - trailTrigger + trailDist), low + trailDist), entryPx - trailCap)
+    strategy.exit("XS", from_entry = "S", stop = trailStop)
+else
+    trailOn := false
+    trailStop := na
+
+// ----------------------------------------------------------------- labels --
+if strategy.position_size > 0 and ta.change(strategy.position_size) != 0
+    label.new(bar_index, low, "L " + str.tostring(qty) + " oz", style = label.style_label_up,
+         color = color.new(color.green, 80), textcolor = color.black, size = size.tiny)
+if strategy.position_size < 0 and ta.change(strategy.position_size) != 0
+    label.new(bar_index, high, "S " + str.tostring(qty) + " oz", style = label.style_label_down,
+         color = color.new(color.red, 80), textcolor = color.black, size = size.tiny)

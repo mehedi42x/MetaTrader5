@@ -70,7 +70,7 @@ the losses exactly like it multiplies the wins.
    week loses money and only 7% of weeks are positive, so a single winning week is the expected
    experience of a losing system on a good streak, not evidence of an edge.
 4. The honest test is the one this repo keeps running: months and years, with the
-   spread charged. On that test the same rules lose -$11,810 (2022-2025) and
+   spread charged. On that test the same rules lose -$10,810 (2022-2025) and
    -$1,502 (2026 Jan-Sep) at 0.01 lot. At the $250/day size those numbers scale to
    roughly -$1.2M and -$150k respectively - the size that makes the wins big makes
    the losses big in exactly the same proportion.

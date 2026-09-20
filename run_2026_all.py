@@ -164,7 +164,7 @@ def main():
     print("HOW 2026 COMPARES (same rules, earlier years, from the committed reports)")
     print("=" * 128)
     print(f"{'variant':40s}{'2022-2025 (4y)':>18s}{'2026 (Jan-Sep)':>18s}")
-    hist = {"E1 script (MTF+BB) x cross": -11810.52, "E2 cBot x cross": -11864.97,
+    hist = {"E1 script (MTF+BB) x cross": -10810.52, "E2 cBot x cross": -11864.97,
             "E1 script x hybrid (your rule)": -5590.22, "E2 cBot x hybrid (your rule)": None,
             "E1 script x trail (cBot stop)": -11780.82, "E2 cBot x trail (cBot stop)": None,
             "E1 script x cross + blockers": -613.08}

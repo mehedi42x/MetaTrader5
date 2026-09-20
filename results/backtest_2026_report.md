@@ -92,7 +92,7 @@ stretch bled every month.
 
 | | 2022-2025 (48 months) | 2026 (8.6 months) | per month |
 |---|---|---|---|
-| E1 script x cross | -$11,810.52 | -$1,501.59 | -$246 → **-$175** |
+| E1 script x cross | -$10,810.52 | -$1,501.59 | -$246 → **-$175** |
 | E2 cBot x cross | -$11,864.97 | -$1,963.38 | -$247 → **-$228** |
 
 The cost model explains it again: 8,858 trades x $0.20 = **$1,771.60** of spread, and the

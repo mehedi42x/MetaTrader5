@@ -46,8 +46,13 @@ HOUSE_COST = 0.20                        # $ per oz per round trip (0.01 lot pay
 
 
 def simulate_pine(d, lot=DEFAULT_LOT, lev=DEFAULT_LEV, spread_pts=0.0, slip_ticks=0,
-                  trigger=TRIGGER, dist=DIST, cap=CAP, days=5, t_end=None):
-    """Returns (trades, skips). One trade dict per closed position."""
+                  trigger=TRIGGER, dist=DIST, cap=CAP, days=5, t_end=None,
+                  block_buy=None, block_sell=None):
+    """Returns (trades, skips). One trade dict per closed position.
+
+    block_buy / block_sell: optional boolean arrays that veto entries on that bar
+    (used for the red-box filter tests). Default None = the original behaviour, so all
+    previously committed numbers are unchanged."""
     o, h, l, c, t = d["open"], d["high"], d["low"], d["close"], d["time"]
     bull, bear = d["bull"], d["bear"]            # 1m crosses
     hb, hs = d["htf_bull"], d["htf_bear"]        # 5m trend (last closed bar)
@@ -103,6 +108,10 @@ def simulate_pine(d, lot=DEFAULT_LOT, lev=DEFAULT_LEV, spread_pts=0.0, slip_tick
         # ---------- 3. script body at this bar's close ------------------------------
         valid_buy = bool(bull[j] and hb[j] and in_bt[j])
         valid_sell = bool(bear[j] and hs[j] and in_bt[j])
+        if block_buy is not None:
+            valid_buy = valid_buy and not bool(block_buy[j])
+        if block_sell is not None:
+            valid_sell = valid_sell and not bool(block_sell[j])
         if valid_buy and pos <= 0:
             queued_entry = 1
         if valid_sell and pos >= 0:
