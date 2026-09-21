@@ -67,15 +67,19 @@ def head(d, k):
 
 
 def redbox_frames(d, fail=FAIL, zone=ZONE, zone_atr=None, levels=1):
-    """Sequential state machine, faithful to the pasted Pine script.
+    """The literal state machine of the pasted Pine code.
 
-    Returns dict with three n-long arrays:
-        active : price is inside an OPEN red box at this bar's close -> no entries
-        top/btm: the band of the active box (nan when no box)
-        end_dir: +1 if a box closed at this bar with a close ABOVE its top,
-                 -1 if it closed BELOW its btm, 0 otherwise (used by the deferred tests)
-    A new pivot band only replaces the box in force when the close at the confirmation bar
-    is inside that new band - exactly the `if not na(ph) and ...` branch of the script.
+    Pine keeps two globals (redBoxTop / redBoxBtm) AND a box handle. Every confirmed
+    pivot overwrites the two globals (even in the middle of a live box) while the
+    handle is created only when the close is inside the band; the handling block then
+    tests the *current* globals - so a pivot that prints away from the price locks a
+    live box on that very bar. This loop reproduces that:
+        * the band in force is always the latest confirmed pivot's band
+        * a box lives while the close stays inside that band and locks when it leaves
+        * end_dir (+1/-1) marks the bar at which a box ended (deferred-entry input)
+    levels > 1 is my own stacked variant: the older bands stay alive (and keep
+    blocking) while the close remains inside them; the newest band still takes over
+    the primary slot exactly as in the script.
     """
     key = (id(d), fail)
     if key not in CACHE:
@@ -83,60 +87,47 @@ def redbox_frames(d, fail=FAIL, zone=ZONE, zone_atr=None, levels=1):
     ev_i, ev_v = CACHE[key]
     c, atr = d["close"], d.get("atr")
     n = len(c)
-    active = np.zeros(n, bool)
+    inside = np.zeros(n, bool)
     top = np.full(n, np.nan)
     btm = np.full(n, np.nan)
     end_dir = np.zeros(n, np.int8)
     if len(ev_i) == 0:
-        return dict(active=active, top=top, btm=btm, end_dir=end_dir)
+        return dict(active=inside, top=top, btm=btm, end_dir=end_dir)
 
-    boxes = []                                  # list of [top, btm] still in force
-    bounds = np.append(ev_i, n)
-    for e in range(len(ev_i)):
-        i0 = int(ev_i[e])
-        i1 = int(bounds[e + 1])
-        # 1. does this pivot's band open a new box at its confirmation bar?
-        ph = float(ev_v[e])
-        w = zone if zone_atr is None else zone_atr * float(atr[i0])
-        ct, cb = ph, ph - w
-        if cb <= c[i0] <= ct:
-            boxes.append([ct, cb])
-            while len(boxes) > levels:
-                boxes.pop(0)
-        if not boxes:
-            continue
-        # 2. each box in force blocks for the contiguous run of closes inside it
-        if len(boxes) == 1:
-            bt, bb = boxes[0]
-            seg = (c[i0:i1] >= bb) & (c[i0:i1] <= bt)
-            k = len(seg) if seg.all() else int(np.argmin(seg))
-            active[i0:i0 + k] = True
-            top[i0:i0 + k], btm[i0:i0 + k] = bt, bb
-            if k < len(seg):
-                boxes.pop()
-        else:
-            for i in range(i0, i1):
-                if not boxes:
-                    break
-                hit = False
-                for b in list(boxes):
-                    if b[1] <= c[i] <= b[0]:
-                        hit = True
-                    else:
-                        boxes.remove(b)
-                if hit:
-                    active[i] = True
-                    top[i] = max(b[0] for b in boxes)
-                    btm[i] = min(b[1] for b in boxes)
-    # break direction: a box was open at i-1 and the close left the band at i
-    open_prev = np.r_[False, active[:-1]]
-    left = open_prev & ~active
-    if left.any():
-        ii = np.where(left)[0]
-        pt = np.r_[np.nan, top[:-1]][ii]
-        pb = np.r_[np.nan, btm[:-1]][ii]
-        end_dir[ii] = np.where(c[ii] > pt, 1, np.where(c[ii] < pb, -1, 0)).astype(np.int8)
-    return dict(active=active, top=top, btm=btm, end_dir=end_dir)
+    pi = 0
+    band = None                       # band in force (the Pine globals)
+    box = False                       # the handle: a box exists
+    extra = []                        # levels>1: older bands still alive
+    for i in range(n):
+        if pi < len(ev_i) and ev_i[pi] == i:
+            w = zone if zone_atr is None else zone_atr * float(atr[i])
+            ph = float(ev_v[pi])
+            pi += 1
+            if box and band is not None and levels > 1:
+                extra = ([band] + extra)[:levels - 1]
+            band = [ph, ph - w]
+            if band[1] <= c[i] <= band[0]:
+                box = True
+        if box and band is not None:
+            if band[1] <= c[i] <= band[0]:
+                inside[i] = True
+                top[i], btm[i] = band[0], band[1]
+            else:
+                box = False
+                end_dir[i] = 1 if c[i] > band[0] else -1
+        if extra:
+            alive = [b for b in extra if b[1] <= c[i] <= b[0]]
+            for b in extra:
+                if b not in alive:
+                    end_dir[i] = 1 if c[i] > b[0] else -1
+            if alive:
+                inside[i] = True
+                top[i] = max([top[i]] + [b[0] for b in alive] if not np.isnan(top[i])
+                             else [b[0] for b in alive])
+                btm[i] = min([btm[i]] + [b[1] for b in alive] if not np.isnan(btm[i])
+                             else [b[1] for b in alive])
+            extra = alive
+    return dict(active=inside, top=top, btm=btm, end_dir=end_dir)
 
 
 def redbox_state(d, **kw):
@@ -427,49 +418,81 @@ def main():
     defer_rows = []
 
     def defer_eval(kwf, mode, delay=0):
-        """(sa, sb, sc, sd, n_defer, n_cancel) over 2022-23 / 2024-25 / 2026 / Sep-26."""
-        ta, tb, tc, td = [], [], [], []
+        """Per-year trade lists for a deferred variant + the 2026 segments."""
+        per = {}
         nd = nc = 0
         for y in (2022, 2023, 2024, 2025):
             fr = redbox_frames(data[y], **kwf)
             x, a, b = simulate_deferred(data[y], fr, mode=mode, delay=delay,
                                         **kw1 | {"days": 365})
-            (ta if y < 2024 else tb).extend(x)
+            per[y] = x
             nd, nc = nd + a, nc + b
-        if g26:
-            fr = redbox_frames(g26, **kwf)
-            tc, _, _ = simulate_deferred(g26, fr, mode=mode, delay=delay,
-                                         **kw1 | {"days": 365})
-        td, _, _ = simulate_deferred(d26, redbox_frames(d26, **kwf), mode=mode,
-                                     delay=delay, **kw1)
-        return st(ta), st(tb), st(tc), st(td), nd, nc
+        tc = (simulate_deferred(g26, redbox_frames(g26, **kwf), mode=mode, delay=delay,
+                                **kw1 | {"days": 365})[0] if g26 else [])
+        td = simulate_deferred(d26, redbox_frames(d26, **kwf), mode=mode, delay=delay,
+                               **kw1)[0]
+        return per, tc, td, nd, nc
+
+    def block_eval(kwf, buy_only=False, sell_only=False):
+        per = {}
+        for y in (2022, 2023, 2024, 2025):
+            fr = redbox_frames(data[y], **kwf)
+            per[y] = run(data[y], fr["active"], buy_only=buy_only, sell_only=sell_only,
+                         **kw1 | {"days": 365})
+        tc = (run(g26, redbox_frames(g26, **kwf)["active"], buy_only=buy_only,
+                  sell_only=sell_only, **kw1 | {"days": 365}) if g26 else [])
+        td = run(d26, redbox_frames(d26, **kwf)["active"], buy_only=buy_only,
+                 sell_only=sell_only, **kw1)
+        return per, tc, td
+
+    def sums(per):
+        t_22_23 = per[2022] + per[2023]
+        t_24_25 = per[2024] + per[2025]
+        t4 = t_22_23 + t_24_25
+        return t_22_23, t_24_25, t4
 
     # the yardstick: the pasted strategy with no filter at all, same windows
-    ta = [t for y in (2022, 2023, 2024, 2025)
-          for t in simulate_pine(data[y], **kw1 | {"days": 365})]
-    NF4 = st(ta)
+    nof = {y: simulate_pine(data[y], **kw1 | {"days": 365}) for y in (2022, 2023, 2024, 2025)}
+    nf_a, nf_b, nf4 = sums(nof)
+    NF22_23, NF24_25, NF4 = st(nf_a), st(nf_b), st(nf4)
     NF26 = st(simulate_pine(d26, **kw1))
     print("\n" + "=" * 122)
     print("6. DEFERRED ENTRY — the blocked signal is NOT dropped, it is held and fired when")
     print("   the box ends.  This is the answer to 'stop the losses without shrinking the")
-    print("   trade count'.  Every row is measured against the unfiltered strategy:")
-    print(f"   no filter 2022-25: {NF4['n']:,} trades, win {NF4['wr']:.1f}%, net ${NF4['net']:,.0f}"
-          f"   |  Sep-2026 7d: {NF26['n']:,} trades, win {NF26['wr']:.1f}%, "
-          f"net ${NF26['net']:,.2f}")
+    print("   trade count'.  Kept% is trades vs the unfiltered rule over the SAME window.")
+    print(f"   no filter: 2022-23 {NF22_23['n']:,} trd {NF22_23['wr']:.1f}% "
+          f"${NF22_23['net']:,.0f} | 2024-25 {NF24_25['n']:,} trd {NF24_25['wr']:.1f}% "
+          f"${NF24_25['net']:,.0f} | 2022-25 {NF4['n']:,} trd {NF4['wr']:.1f}% "
+          f"${NF4['net']:,.0f} | Sep-26 7d {NF26['n']:,} trd {NF26['wr']:.1f}% "
+          f"${NF26['net']:,.2f}")
     print("=" * 122)
-    print(f"{'variant':30s}{'4y trades':>10s}{'kept':>6s}{'win%':>7s}{'4y net $':>11s}"
-          f"{'2024-25 net':>13s}{'2024-25 win':>12s}{'Sep26 trd':>10s}{'Sep26 win':>10s}"
-          f"{'Sep26 net':>10s}")
+    print(f"{'variant':30s}{'4y trades':>10s}{'kept':>6s}{'4y win%':>9s}{'4y net $':>11s}"
+          f"{'2022-23 net':>13s}{'2024-25 net':>13s}{'24-25 win':>10s}"
+          f"{'Sep26 trd':>10s}{'Sep26 win':>10s}{'Sep26 net':>10s}")
+    print(f"{'(no filter)':30s}{NF4['n']:>10,}{100:>5.0f}%{NF4['wr']:>8.1f}%{NF4['net']:>11,.0f}"
+          f"{NF22_23['net']:>13,.0f}{NF24_25['net']:>13,.0f}{NF24_25['wr']:>9.1f}%"
+          f"{NF26['n']:>10,}{NF26['wr']:>9.1f}%{NF26['net']:>10,.2f}")
     for tag, kwf in [("$5 box", dict(fail=3, zone=5.0)),
                      ("ATR 1.0x box", dict(fail=3, zone_atr=1.0))]:
+        # the plain block, as pasted
+        per, tc, td = block_eval(kwf)
+        xa, xb, x4 = sums(per)
+        sa, sb, s4, sc, sd = st(xa), st(xb), st(x4), st(tc), st(td)
+        print(f"{tag + ' / block (as pasted)':30s}{s4['n']:>10,}{100*s4['n']/NF4['n']:>5.0f}%"
+              f"{s4['wr']:>8.1f}%{s4['net']:>11,.0f}{sa['net']:>13,.0f}{sb['net']:>13,.0f}"
+              f"{sb['wr']:>9.1f}%{sd['n']:>10,}{sd['wr']:>9.1f}%{sd['net']:>10,.2f}")
+        defer_rows.append((tag + " / block", sa, sb, s4, sc, sd, 100 * s4["n"] / NF4["n"]))
         for mode, dly in [("box_end", 0), ("box_break", 0), ("delay", 3)]:
-            sa, sb, sc, sd, nd, nc = defer_eval(kwf, mode, dly)
-            keep = 100.0 * sa["n"] / NF4["n"]
-            nm = f"{tag} / {mode}" + (f" {dly}" if mode == "delay" else "")
-            print(f"{nm:30s}{sa['n']:>10,}{keep:>5.0f}%{sa['wr']:>6.1f}%{sa['net']:>11,.0f}"
-                  f"{sb['net']:>13,.0f}{sb['wr']:>11.1f}%{sd['n']:>10,}{sd['wr']:>9.1f}%"
-                  f"{sd['net']:>10,.2f}")
-            defer_rows.append((nm, sa, sb, sc, sd, keep))
+            per, tc, td, nd, nc = defer_eval(kwf, mode, dly)
+            xa, xb, x4 = sums(per)
+            sa, sb, s4, sc, sd = st(xa), st(xb), st(x4), st(tc), st(td)
+            nm = f"{tag} / defer {mode}" + (f" {dly}" if mode == "delay" else "")
+            print(f"{nm:30s}{s4['n']:>10,}{100*s4['n']/NF4['n']:>5.0f}%{s4['wr']:>8.1f}%"
+                  f"{s4['net']:>11,.0f}{sa['net']:>13,.0f}{sb['net']:>13,.0f}"
+                  f"{sb['wr']:>9.1f}%{sd['n']:>10,}{sd['wr']:>9.1f}%{sd['net']:>10,.2f}")
+            defer_rows.append((nm, sa, sb, s4, sc, sd, 100 * s4["n"] / NF4["n"]))
+        print(f"  {tag}: {nd:,} deferred orders fired, {nc:,} cancelled (only a cancel really"
+              f" removes a trade)")
 
     # ---------------- 6b. is the deferred version robust across the band? -------------
     print("\n" + "=" * 122)
@@ -479,13 +502,15 @@ def main():
     print(f"{'band':22s}{'4y trades':>10s}{'kept':>6s}{'4y win%':>9s}{'4y net $':>11s}"
           f"{'2024-25 win':>12s}{'2024-25 net $':>14s}{'Sep26 win':>10s}{'Sep26 net':>10s}")
     print(f"{'(no filter)':22s}{NF4['n']:>10,}{100:>5.0f}%{NF4['wr']:>8.1f}%{NF4['net']:>11,.0f}"
-          f"{'':>12s}{'':>14s}{NF26['wr']:>9.1f}%{NF26['net']:>10,.2f}")
+          f"{NF24_25['wr']:>11.1f}%{NF24_25['net']:>14,.0f}{NF26['wr']:>9.1f}%"
+          f"{NF26['net']:>10,.2f}")
     for fail in (2, 3, 4):
         for zone in (3.0, 5.0, 8.0, 12.0):
-            sa, sb, sc, sd, nd, nc = defer_eval(dict(fail=fail, zone=zone), "box_end")
-            keep = 100.0 * sa["n"] / NF4["n"]
-            print(f"${zone:<5.0f} fail {fail}          {sa['n']:>10,}{keep:>5.0f}%{sa['wr']:>8.1f}%"
-                  f"{sa['net']:>11,.0f}{sb['wr']:>11.1f}%{sb['net']:>14,.0f}"
+            per, tc, td, nd, nc = defer_eval(dict(fail=fail, zone=zone), "box_end")
+            xa, xb, x4 = sums(per)
+            s4, sb, sd = st(x4), st(xb), st(td)
+            print(f"${zone:<5.0f} fail {fail}          {s4['n']:>10,}{100*s4['n']/NF4['n']:>5.0f}%"
+                  f"{s4['wr']:>8.1f}%{s4['net']:>11,.0f}{sb['wr']:>11.1f}%{sb['net']:>14,.0f}"
                   f"{sd['wr']:>9.1f}%{sd['net']:>10,.2f}")
 
     # ---------------- 7. head to head ----------------
@@ -494,33 +519,20 @@ def main():
     print("=" * 122)
     kwf = dict(fail=3, zone=5.0)
     rows7 = []
-    for nm, fn in [("no filter", None),
-                   ("BLOCK inside box", "block"),
-                   ("DEFER (box_end)", ("box_end", 0)),
-                   ("DEFER (box_break)", ("box_break", 0))]:
-        ta, tb, tc, td = [], [], [], []
-        for y in (2022, 2023, 2024, 2025):
-            fr = redbox_frames(data[y], **kwf)
-            if fn is None:
-                x = simulate_pine(data[y], **kw1 | {"days": 365})
-            elif fn == "block":
-                x = run(data[y], fr["active"], **kw1 | {"days": 365})
-            else:
-                x, _, _ = simulate_deferred(data[y], fr, mode=fn[0], delay=fn[1],
-                                            **kw1 | {"days": 365})
-            (ta if y < 2024 else tb).append(x)
-        ta = [t for x in ta for t in x]
-        tb = [t for x in tb for t in x]
-        fr = redbox_frames(d26, **kwf)
-        if fn is None:
+    for nm, kind in [("no filter", "none"), ("BLOCK inside box", "block"),
+                     ("DEFER (box_end)", "box_end"), ("DEFER (box_break)", "box_break")]:
+        if kind == "none":
+            xa, xb, x4 = nf_a, nf_b, nf4
             td = simulate_pine(d26, **kw1)
-        elif fn == "block":
-            td = run(d26, fr["active"], **kw1)
+        elif kind == "block":
+            per, tc, td = block_eval(kwf)
+            xa, xb, x4 = sums(per)
         else:
-            td, _, _ = simulate_deferred(d26, fr, mode=fn[0], delay=fn[1], **kw1)
-        sa, sb, sd = st(ta), st(tb), st(td)
-        rows7.append((nm, sa, sb, sd))
-        print(f"{nm:20s}4y: {sa['n']:>6,} trd {sa['wr']:>5.1f}% ${sa['net']:>10,.0f}"
+            per, tc, td, nd, nc = defer_eval(kwf, kind)
+            xa, xb, x4 = sums(per)
+        s4, sb, sd = st(x4), st(xb), st(td)
+        rows7.append((nm, s4, sb, sd))
+        print(f"{nm:20s}2022-25: {s4['n']:>6,} trd {s4['wr']:>5.1f}% ${s4['net']:>10,.0f}"
               f"   | 2024-25: {sb['n']:>6,} {sb['wr']:>5.1f}% ${sb['net']:>9,.0f}"
               f"   | Sep-2026 7d: {sd['n']:>4,} {sd['wr']:>5.1f}% ${sd['net']:>8,.2f}")
 
@@ -624,9 +636,9 @@ def main():
     xs = [100.0 * c / NF4["n"] for c in cnt]
     axes[1].scatter(xs, wrs, s=70, c=nets, cmap="RdYlGn", vmin=-6000, vmax=2500,
                     edgecolor="k", linewidth=0.4, label="skip inside the box")
-    dxs = [r[5] for r in defer_rows]
-    dys = [r[1]["wr"] for r in defer_rows]
-    dns = [r[1]["net"] for r in defer_rows]
+    dxs = [r[6] for r in defer_rows]
+    dys = [r[3]["wr"] for r in defer_rows]
+    dns = [r[3]["net"] for r in defer_rows]
     sc = axes[1].scatter(dxs, dys, s=110, marker="^", c=dns, cmap="RdYlGn", vmin=-6000,
                          vmax=2500, edgecolor="k", linewidth=0.4, label="defer until box ends")
     axes[1].axhline(NF4["wr"], color="#888888", ls="--", lw=1)
@@ -673,14 +685,14 @@ def main():
                 trades_kept_pct=100.0 * r[5]["n"] / NF4["n"]) for r in rows]
     out += [dict(group="deferred", variant=r[0], net_2022_23=r[1]["net"], win_2022_23=r[1]["wr"],
                  n_2022_23=r[1]["n"], net_2024_25=r[2]["net"], win_2024_25=r[2]["wr"],
-                 n_2024_25=r[2]["n"], net_2026=r[3]["net"], net_sep26=r[4]["net"],
-                 sep26_win=r[4]["wr"], net_4y=r[1]["net"], win_4y=r[1]["wr"], n_4y=r[1]["n"],
-                 trades_kept_pct=r[5]) for r in defer_rows]
-    out += [dict(group="head_to_head", variant=r[0], net_2022_23=r[1]["net"],
-                 win_2022_23=r[1]["wr"], n_2022_23=r[1]["n"], net_2024_25=r[2]["net"],
-                 win_2024_25=r[2]["wr"], n_2024_25=r[2]["n"], net_2026=np.nan,
+                 n_2024_25=r[2]["n"], net_2026=r[4]["net"], net_sep26=r[5]["net"],
+                 sep26_win=r[5]["wr"], n_sep26=r[5]["n"], net_4y=r[3]["net"], win_4y=r[3]["wr"],
+                 n_4y=r[3]["n"], trades_kept_pct=r[6]) for r in defer_rows]
+    out += [dict(group="head_to_head", variant=r[0], net_2024_25=r[2]["net"],
+                 win_2024_25=r[2]["wr"], n_2024_25=r[2]["n"],
                  net_sep26=r[3]["net"], sep26_win=r[3]["wr"], n_sep26=r[3]["n"],
-                 trades_kept_pct=np.nan) for r in rows7]
+                 net_4y=r[1]["net"], win_4y=r[1]["wr"], n_4y=r[1]["n"],
+                 trades_kept_pct=100.0 * r[1]["n"] / NF4["n"]) for r in rows7]
     out.append(dict(group="baseline", variant="(no filter)", net_2022_23=np.nan,
                     win_2022_23=np.nan, n_2022_23=np.nan, net_2024_25=np.nan,
                     win_2024_25=np.nan, n_2024_25=np.nan, net_2026=np.nan,
