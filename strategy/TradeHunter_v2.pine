@@ -1,0 +1,187 @@
+//@version=6
+// Trade Hunter v2 — Red Box + Momentum/Trend/Hard-SL filters
+// (Backtest-validated on XAUUSD M1 2021-2025, see backtest/REPORT.md)
+strategy("Trade Hunter v2 - Red Box + Filters", overlay=true, initial_capital=100000,
+     default_qty_type=strategy.fixed, margin_long=0, margin_short=0,
+     max_labels_count=500, max_boxes_count=500)
+
+// ═══════════ INPUTS ═══════════
+emaFastLen  = input.int(6, "Fast EMA (1m)")
+emaSlowLen  = input.int(9, "Slow EMA (1m)")
+htfTimeframe= input.timeframe("5", "5M Trend TF")
+htfFastLen  = input.int(9,  "5M Fast EMA")
+htfSlowLen  = input.int(12, "5M Slow EMA")
+
+useZoneFilter = input.bool(true, "Enable Dynamic Stalling Box")
+failCandles   = input.int(3, "Wait Candles Count", minval=2)
+zoneRange     = input.float(5.0, "Zone Range (Points/USD)", minval=0.5, step=0.5)
+
+// ── NEW FILTERS (v2) ──
+useSepFilter   = input.bool(true, "Filter 1: Min EMA Separation", group="V2 Filters")
+minSepBps      = input.float(0.8, "Min EMA Gap (bps of price)", minval=0.0, step=0.1, group="V2 Filters")
+useTrendFilter = input.bool(true, "Filter 2: EMA50 Trend Align", group="V2 Filters")
+ema50Len       = input.int(50, "Trend EMA Length", group="V2 Filters")
+slopeLook      = input.int(5,  "Trend Slope Lookback", group="V2 Filters")
+useHardSL      = input.bool(true, "Filter 3: Hard Stop Loss", group="V2 Filters")
+hardSLusd      = input.float(3.0, "Hard SL (USD)", minval=0.5, step=0.5, group="V2 Filters")
+
+trailTrigger= input.float(2.0, "Activation Profit Trigger (USD)", minval=0.1, step=0.1)
+trailDist   = input.float(1.5, "Trailing Distance (USD)", minval=0.1, step=0.1)
+maxTrailCap = input.float(2.0, "Max Profit Lock Cap (USD)", minval=0.1, step=0.1)
+
+lotSize   = input.float(0.01, "Lot Size", minval=0.01, step=0.01)
+leverage  = input.float(1000.0, "Leverage", minval=1.0, step=10.0)
+backtestDays = input.int(7, "Backtest Days", minval=1)
+slippageTicks= input.int(0, "Slippage (Ticks)", minval=0)
+spreadPoints = input.float(0.0, "Spread (Points)", minval=0.0, step=0.1)
+
+showEMA=input.bool(true,"Show EMAs"), showZones=input.bool(true,"Show Stalling Boxes")
+showTrailLine=input.bool(true,"Show Trailing Stop Line"), showSignals=input.bool(true,"Show Arrows")
+showPnL=input.bool(true,"Show Exit PnL"), showTable=input.bool(true,"Show Report Table")
+
+// ═══════════ CALCULATIONS ═══════════
+tradeQty = lotSize * leverage
+startTime = timenow - (backtestDays * 86400000)
+inBacktest = time >= startTime
+costPerTrade = (spreadPoints + (slippageTicks * syminfo.mintick)) * tradeQty
+
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+bullCross = ta.crossover(emaFast, emaSlow)
+bearCross = ta.crossunder(emaFast, emaSlow)
+
+f_ema(len) => ta.ema(close, len)[1]
+htfFast = request.security(syminfo.tickerid, htfTimeframe, f_ema(htfFastLen), barmerge.gaps_off, barmerge.lookahead_on)
+htfSlow = request.security(syminfo.tickerid, htfTimeframe, f_ema(htfSlowLen), barmerge.gaps_off, barmerge.lookahead_on)
+htfBullish = htfFast > htfSlow
+htfBearish = htfFast < htfSlow
+
+// ═══════════ RED BOX ENGINE (unchanged) ═══════════
+var box activeRedBox = na
+var float redBoxTop = na
+var float redBoxBtm = na
+ph = ta.pivothigh(high, 1, failCandles)
+if not na(ph)
+    redBoxTop := ph
+    redBoxBtm := ph - zoneRange
+    if close <= redBoxTop and close >= redBoxBtm and showZones
+        activeRedBox := box.new(left=bar_index, top=redBoxTop, right=bar_index, bottom=redBoxBtm,
+             border_color=color.new(#FF5252, 20), bgcolor=color.new(#FF5252, 75))
+bool isInsideRedBox = false
+if not na(activeRedBox)
+    if close <= redBoxTop and close >= redBoxBtm
+        box.set_right(activeRedBox, bar_index)
+        isInsideRedBox := true
+    else
+        box.set_right(activeRedBox, bar_index)
+        activeRedBox := na
+
+// ═══════════ V2 FILTERS ═══════════
+// 1) Momentum quality: EMA gap must be wide enough (normalised in bps so it works on any price level)
+sepBps = math.abs(emaFast - emaSlow) / close * 10000.0
+sepOK  = not useSepFilter or sepBps >= minSepBps
+
+// 2) Higher-structure trend alignment (EMA50 + its slope)
+ema50   = ta.ema(close, ema50Len)
+slope50 = ema50 - ema50[slopeLook]
+trendLongOK  = not useTrendFilter or (close > ema50 and slope50 > 0)
+trendShortOK = not useTrendFilter or (close < ema50 and slope50 < 0)
+
+boxBlock = useZoneFilter and isInsideRedBox
+validBuy  = bullCross and htfBullish and not boxBlock and sepOK and trendLongOK  and inBacktest
+validSell = bearCross and htfBearish and not boxBlock and sepOK and trendShortOK and inBacktest
+
+// ═══════════ ENTRIES ═══════════
+if validBuy and strategy.position_size <= 0
+    strategy.entry("Buy", strategy.long, qty=tradeQty)
+if validSell and strategy.position_size >= 0
+    strategy.entry("Sell", strategy.short, qty=tradeQty)
+
+if strategy.position_size > 0 and bearCross
+    strategy.close("Buy")
+if strategy.position_size < 0 and bullCross
+    strategy.close("Sell")
+
+// ═══════════ EXITS: HARD SL + TRAILING ═══════════
+var float trailStop = na
+var bool  trailActive = false
+
+if strategy.position_size > 0
+    float entryPr = strategy.position_avg_price
+    if high >= (entryPr + trailTrigger)
+        trailActive := true
+    float hardStop = entryPr - hardSLusd
+    if trailActive
+        float targetStop   = high - trailDist
+        float maxStopLevel = entryPr + maxTrailCap
+        float minLockLevel = entryPr + (trailTrigger - trailDist)
+        trailStop := math.min(math.max(nz(trailStop, minLockLevel), targetStop), maxStopLevel)
+        strategy.exit("Trail Exit Buy", "Buy", stop=trailStop)
+    else if useHardSL
+        strategy.exit("SL Buy", "Buy", stop=hardStop)
+else if strategy.position_size < 0
+    float entryPr = strategy.position_avg_price
+    if low <= (entryPr - trailTrigger)
+        trailActive := true
+    float hardStop = entryPr + hardSLusd
+    if trailActive
+        float targetStop   = low + trailDist
+        float minStopLevel = entryPr - maxTrailCap
+        float minLockLevel = entryPr - (trailTrigger - trailDist)
+        trailStop := math.max(math.min(nz(trailStop, minLockLevel), targetStop), minStopLevel)
+        strategy.exit("Trail Exit Sell", "Sell", stop=trailStop)
+    else if useHardSL
+        strategy.exit("SL Sell", "Sell", stop=hardStop)
+else
+    trailStop := na
+    trailActive := false
+
+// ═══════════ VISUALS ═══════════
+plot(showEMA ? emaFast : na, "Fast EMA", color=#00E676, linewidth=2)
+plot(showEMA ? emaSlow : na, "Slow EMA", color=#FF5252, linewidth=2)
+plot(useTrendFilter ? ema50 : na, "Trend EMA50", color=color.new(color.aqua, 40))
+plot(showTrailLine and trailActive ? trailStop : na, "Trailing Stop Lock", color=color.yellow, linewidth=2, style=plot.style_linebr)
+plotshape(showSignals and validBuy,  style=shape.arrowup,   location=location.belowbar, color=#00E676, size=size.small)
+plotshape(showSignals and validSell, style=shape.arrowdown, location=location.abovebar, color=#FF5252, size=size.small)
+
+// ═══════════ EXIT PnL LABELS ═══════════
+var int lastClosedTrades = 0
+var float totalDeductions = 0.0
+if strategy.closedtrades > lastClosedTrades
+    for i = lastClosedTrades to strategy.closedtrades - 1
+        float rawPnl = strategy.closedtrades.profit(i)
+        float netTradePnl = rawPnl - costPerTrade
+        totalDeductions += costPerTrade
+        int exitBar = nz(strategy.closedtrades.exit_bar_index(i), bar_index)
+        bool wasLong = strategy.closedtrades.size(i) > 0
+        if showPnL
+            string txt = (netTradePnl >= 0 ? "+" : "") + str.tostring(netTradePnl, "#.##")
+            color bgCol = netTradePnl >= 0 ? #00E676 : #FF5252
+            label.new(x=exitBar, y=na, yloc=wasLong ? yloc.belowbar : yloc.abovebar, text=txt,
+                 style=wasLong ? label.style_label_up : label.style_label_down,
+                 color=bgCol, textcolor=color.white, size=size.small)
+    lastClosedTrades := strategy.closedtrades
+
+// ═══════════ REPORT TABLE ═══════════
+var table reportTable = table.new(position=position.top_right, columns=2, rows=5, bgcolor=#161B22, border_width=1, border_color=#30363D)
+if barstate.islast
+    if showTable
+        int totalTrades = strategy.closedtrades
+        int winTrades = strategy.wintrades
+        float finalNetPnL = strategy.netprofit - totalDeductions
+        float winRate = totalTrades > 0 ? (winTrades / totalTrades) * 100.0 : 0.0
+        color pnlColor = finalNetPnL >= 0 ? #00E676 : #FF5252
+        string statusTxt = isInsideRedBox ? "INSIDE RED BOX (PAUSED)" : not sepOK ? "LOW MOMENTUM (SKIP)" : htfBullish ? "5M BULLISH" : htfBearish ? "5M BEARISH" : "READY"
+        color statusCol = isInsideRedBox ? color.orange : not sepOK ? color.yellow : htfBullish ? #00E676 : htfBearish ? #FF5252 : color.gray
+        table.cell(reportTable, 0, 0, "STATUS", bgcolor=#1F242C, text_color=color.white, text_size=size.small)
+        table.cell(reportTable, 1, 0, statusTxt, bgcolor=#1F242C, text_color=statusCol, text_size=size.small)
+        table.cell(reportTable, 0, 1, "PERIOD", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+        table.cell(reportTable, 1, 1, str.tostring(backtestDays) + " Days", bgcolor=#161B22, text_color=color.white, text_size=size.small)
+        table.cell(reportTable, 0, 2, "TOTAL TRADES", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+        table.cell(reportTable, 1, 2, str.tostring(totalTrades), bgcolor=#161B22, text_color=color.white, text_size=size.small)
+        table.cell(reportTable, 0, 3, "WIN RATE", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+        table.cell(reportTable, 1, 3, str.tostring(winRate, "#.#") + "%", bgcolor=#161B22, text_color=winRate >= 50 ? #00E676 : #FF5252, text_size=size.small)
+        table.cell(reportTable, 0, 4, "NET PnL", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+        table.cell(reportTable, 1, 4, (finalNetPnL >= 0 ? "+" : "") + str.tostring(finalNetPnL, "#.##"), bgcolor=#161B22, text_color=pnlColor, text_size=size.small)
+    else
+        table.clear(reportTable, 0, 0, 1, 4)
