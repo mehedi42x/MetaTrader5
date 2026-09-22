@@ -1,0 +1,88 @@
+//@version=6
+// ═══════════════════════════════════════════════════════════════
+//  5M EMA 9/12 trend  +  1M EMA 2/3 cross entry  +  fixed TP / SL
+//  Backtested on XAUUSD M1 2021-2026 -> see backtest/REPORT_9_12_2_3.md
+//  NOTE: on XAUUSD 1 pip = $0.10, so 10 pips = $1.00.
+//        $1.00 TP/SL loses badly (spread is 20% of the target).
+//        Default below is $10.00 which is the version that survives.
+// ═══════════════════════════════════════════════════════════════
+strategy("EMA 5M 9/12 + 1M 2/3 | Fixed TP-SL", overlay=true,
+     initial_capital=100000, default_qty_type=strategy.fixed,
+     margin_long=0, margin_short=0, max_labels_count=500)
+
+// ─────────────── INPUTS ───────────────
+f1 = input.int(2,  "1M Fast EMA", group="Entry (1M)")
+s1 = input.int(3,  "1M Slow EMA", group="Entry (1M)")
+
+htfTF = input.timeframe("5", "Trend Timeframe", group="Trend (5M)")
+f5 = input.int(9,  "5M Fast EMA", group="Trend (5M)")
+s5 = input.int(12, "5M Slow EMA", group="Trend (5M)")
+
+tpUsd = input.float(10.0, "Take Profit (USD)", minval=0.1, step=0.1, group="Exits")
+slUsd = input.float(10.0, "Stop Loss (USD)",  minval=0.1, step=0.1, group="Exits")
+
+lotSize  = input.float(0.01, "Lot Size", minval=0.01, step=0.01, group="Account")
+leverage = input.float(1000.0, "Leverage", minval=1.0, step=10.0, group="Account")
+
+showEMA    = input.bool(true, "Show EMAs")
+showSignal = input.bool(true, "Show Arrows")
+showTable  = input.bool(true, "Show Report Table")
+
+tradeQty = lotSize * leverage
+
+// ─────────────── 1M ENTRY TRIGGER ───────────────
+e1f = ta.ema(close, f1)
+e1s = ta.ema(close, s1)
+bull1 = ta.crossover(e1f, e1s)
+bear1 = ta.crossunder(e1f, e1s)
+
+// ─────────────── 5M TREND (non-repainting) ───────────────
+f_ema(len) => ta.ema(close, len)[1]
+h5f = request.security(syminfo.tickerid, htfTF, f_ema(f5), barmerge.gaps_off, barmerge.lookahead_on)
+h5s = request.security(syminfo.tickerid, htfTF, f_ema(s5), barmerge.gaps_off, barmerge.lookahead_on)
+bull5 = h5f > h5s
+bear5 = h5f < h5s
+
+// ─────────────── SIGNALS ───────────────
+longSig  = bull1 and bull5
+shortSig = bear1 and bear5
+
+if longSig and strategy.position_size == 0
+    strategy.entry("Long", strategy.long, qty=tradeQty)
+if shortSig and strategy.position_size == 0
+    strategy.entry("Short", strategy.short, qty=tradeQty)
+
+// ─────────────── FIXED TP / SL ───────────────
+if strategy.position_size > 0
+    ep = strategy.position_avg_price
+    strategy.exit("X-L", "Long", limit=ep + tpUsd, stop=ep - slUsd)
+if strategy.position_size < 0
+    ep = strategy.position_avg_price
+    strategy.exit("X-S", "Short", limit=ep - tpUsd, stop=ep + slUsd)
+
+// ─────────────── VISUALS ───────────────
+plot(showEMA ? e1f : na, "1M Fast", color=#00E676, linewidth=1)
+plot(showEMA ? e1s : na, "1M Slow", color=#FF5252, linewidth=1)
+plot(showEMA ? h5f : na, "5M Fast", color=color.new(color.aqua, 30), linewidth=2)
+plot(showEMA ? h5s : na, "5M Slow", color=color.new(color.orange, 30), linewidth=2)
+bgcolor(bull5 ? color.new(color.green, 94) : bear5 ? color.new(color.red, 94) : na)
+
+plotshape(showSignal and longSig,  style=shape.triangleup,   location=location.belowbar, color=#00E676, size=size.tiny)
+plotshape(showSignal and shortSig, style=shape.triangledown, location=location.abovebar, color=#FF5252, size=size.tiny)
+
+// ─────────────── REPORT TABLE ───────────────
+var table tb = table.new(position.top_right, 2, 4, bgcolor=#161B22, border_width=1, border_color=#30363D)
+if barstate.islast and showTable
+    int tt = strategy.closedtrades
+    float wr = tt > 0 ? strategy.wintrades / tt * 100.0 : 0.0
+    table.cell(tb, 0, 0, "TREND",  bgcolor=#1F242C, text_color=color.silver, text_size=size.small)
+    table.cell(tb, 1, 0, bull5 ? "5M BULL" : bear5 ? "5M BEAR" : "FLAT", bgcolor=#1F242C,
+         text_color=bull5 ? #00E676 : bear5 ? #FF5252 : color.gray, text_size=size.small)
+    table.cell(tb, 0, 1, "TRADES", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+    table.cell(tb, 1, 1, str.tostring(tt), bgcolor=#161B22, text_color=color.white, text_size=size.small)
+    table.cell(tb, 0, 2, "WIN RATE", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+    table.cell(tb, 1, 2, str.tostring(wr, "#.#") + "%", bgcolor=#161B22,
+         text_color=wr >= 50 ? #00E676 : #FF5252, text_size=size.small)
+    table.cell(tb, 0, 3, "NET PnL", bgcolor=#161B22, text_color=color.silver, text_size=size.small)
+    table.cell(tb, 1, 3, str.tostring(strategy.netprofit, "#.##"), bgcolor=#161B22,
+         text_color=strategy.netprofit >= 0 ? #00E676 : #FF5252, text_size=size.small)
